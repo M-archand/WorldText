@@ -4,21 +4,33 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.340">
+    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.363">
       <PrivateAssets>none</PrivateAssets>
       <ExcludeAssets>runtime</ExcludeAssets>
       <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="CS2MenuManager" Version="1.0.40" />
-    <PackageReference Include="Dapper" Version="2.1.66" />
-    <PackageReference Include="MySqlConnector" Version="2.4.0" />
+    <PackageReference Include="CS2MenuManager" Version="1.0.42" />
+    <PackageReference Include="Dapper" Version="2.1.72" />
+    <PackageReference Include="MySqlConnector" Version="2.5.0" />
+
     <Reference Include="K4WorldTextSharedApi">
-      <HintPath>C:\CounterStrikeSharp\K4-WorldText-API\src-shared\bin\Debug\net8.0\K4-WorldText-SharedAPI.dll</HintPath>
-      <Private>true</Private>
+      <HintPath>../K4-WorldText-API/src-shared/bin/Debug/net8.0/K4-WorldText-SharedAPI.dll</HintPath>
+      <Private>false</Private>
     </Reference>
+
   </ItemGroup>
+
+  <Target Name="CopyOnlySelectedNuGetAssemblies" AfterTargets="Build">
+    <ItemGroup>
+      <SelectedNuGetAssemblies Include="@(ReferencePath)"
+                               Condition="'%(ReferencePath.Filename)' == 'Dapper' Or '%(ReferencePath.Filename)' == 'MySqlConnector'" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SelectedNuGetAssemblies)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
