@@ -24,6 +24,7 @@ namespace WorldText
 
             Config.Reload();
             Server.NextWorldUpdate(() => RefreshText());
+            player.PrintToChat($" {ChatColors.Lime}WorldText config & placement has been reloaded!");
         }
 
         // The handler for when !text <#> is called
