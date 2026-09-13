@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
@@ -8,17 +8,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.363">
+    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.374">
       <PrivateAssets>none</PrivateAssets>
       <ExcludeAssets>runtime</ExcludeAssets>
       <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="CS2MenuManager" Version="1.0.42" />
-    <PackageReference Include="Dapper" Version="2.1.72" />
-    <PackageReference Include="MySqlConnector" Version="2.5.0" />
+    <PackageReference Include="Dapper" Version="2.1.86" />
+    <PackageReference Include="MySqlConnector" Version="2.6.2" />
 
     <Reference Include="K4WorldTextSharedApi">
-      <HintPath>../K4-WorldText-API/src-shared/bin/Debug/net8.0/K4-WorldText-SharedAPI.dll</HintPath>
+      <HintPath>$(MSBuildThisFileDirectory)K4-WorldText-SharedAPI.dll</HintPath>
       <Private>false</Private>
     </Reference>
 
@@ -26,11 +26,8 @@
 
   <Target Name="CopyOnlySelectedNuGetAssemblies" AfterTargets="Build">
     <ItemGroup>
-      <SelectedNuGetAssemblies Include="@(ReferencePath)"
-                               Condition="'%(ReferencePath.Filename)' == 'Dapper' Or '%(ReferencePath.Filename)' == 'MySqlConnector'" />
+      <SelectedNuGetAssemblies Include="@(ReferencePath)" Condition="'%(ReferencePath.Filename)' == 'Dapper' Or '%(ReferencePath.Filename)' == 'MySqlConnector'" />
     </ItemGroup>
-    <Copy SourceFiles="@(SelectedNuGetAssemblies)"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(SelectedNuGetAssemblies)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
 </Project>
