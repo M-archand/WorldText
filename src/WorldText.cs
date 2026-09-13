@@ -4,6 +4,7 @@ using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Extensions;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 using CS2MenuManager.API.Class;
 using K4WorldTextSharedAPI;
@@ -16,7 +17,7 @@ using Microsoft.Extensions.Logging;
 
 namespace WorldText
 {
-    [MinimumApiVersion(205)]
+    [MinimumApiVersion(369)]
     public partial class PluginWorldText : BasePlugin, IPluginConfig<PluginConfig>
     {
         public override string ModuleName => "World Text";
@@ -26,6 +27,7 @@ namespace WorldText
         public static PluginCapability<IK4WorldTextSharedAPI> Capability_SharedAPI { get; } = new("k4-worldtext:sharedapi");
         private bool _hasMenuManager;
         private Dictionary<int, List<int>> _currentTextByGroup = new();
+        private string? _textLoadedForMap;
         private static readonly string chatPrefix = $" {ChatColors.Purple}[{ChatColors.LightPurple}World-Text{ChatColors.Purple}]";
         private readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions
         {
@@ -43,22 +45,13 @@ namespace WorldText
                 Logger.LogError("You don't have K4-WorldText-API installed. It is required. Download it from https://github.com/M-archand/K4-WorldText-API/releases");
             }
 
-            RegisterEventHandler((EventRoundStart @event, GameEventInfo info) =>
-            {
-                DisplayConfiguredText();
-                return HookResult.Continue;
-            });
 
             RegisterListener<Listeners.OnMapStart>((mapName) =>
             {
-                Server.NextWorldUpdate(() =>
-                {
-                    if (Config.EnableDatabase)
-                        LoadWorldTextFromDb();
-                    else
-                        LoadWorldTextFromJson(mapName);
-                });
+                Server.NextWorldUpdate(() => EnsureTextLoaded(mapName));
             });
+
+            AddTimer(3, () => EnsureTextLoaded(Server.MapName), TimerFlags.STOP_ON_MAPCHANGE);
 
             RegisterListener<Listeners.OnMapEnd>(() =>
             {
@@ -70,6 +63,7 @@ namespace WorldText
                             checkAPI.RemoveWorldText(id, false);
                 }
                 _currentTextByGroup.Clear();
+                _textLoadedForMap = null;
             });
 
             // Check for CS2MenuManager installation
@@ -96,27 +90,11 @@ namespace WorldText
                 Logger.LogWarning("Configuration version mismatch (Expected: {0} | Current: {1})", ExpectedVersion, Config.Version);
 
             if (Config.EnableDatabase)
-            {
                 InitializeDatabaseConnectionString();
 
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await EnsureTablesAsync().ConfigureAwait(false);
-                        Server.NextWorldUpdate(() => LoadWorldTextFromDb());
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError(ex, "Error loading WorldText info from database. Please check your credentials.");
-                        Server.NextWorldUpdate(() => LoadWorldTextFromJson());
-                    }
-                });
-            }
-            else
-            {
-                Server.NextWorldUpdate(() => LoadWorldTextFromJson());
-            }
+            // Text is not spawned here. OnConfigParsed runs before OnAllPluginsLoaded, so the
+            // K4-WorldText-API capability may not resolve yet. EnsureTextLoaded is driven by
+            // OnMapStart and the catch-up timer instead, and is idempotent per map.
 
             AddCommand($"css_{Config.AddCommand}", "Add text in front of you", OnTextAdd);
             AddCommand($"css_{Config.RemoveCommand}", "Removes the closest group of text", OnTextRemove);
@@ -136,6 +114,7 @@ namespace WorldText
                 }
             }
             _currentTextByGroup.Clear();
+            _textLoadedForMap = null;
         }
 
         private void SaveWorldTextToFile(Vector location, QAngle rotation, int groupNumber)
@@ -468,33 +447,53 @@ namespace WorldText
             return linesList;
         }
 
-        private void DisplayConfiguredText()
+        private static IK4WorldTextSharedAPI? TryGetSharedApi()
         {
-            Task.Run(() =>
+            try
             {
-                foreach (var groupNumber in Config.WorldText.Keys)
-                {
-                    var linesList = GetTextLines(groupNumber);
+                return Capability_SharedAPI.Get();
+            }
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
+        }
 
-                    Server.NextWorldUpdate(() =>
-                    {
-                        var checkAPI = Capability_SharedAPI.Get();
-                        if (checkAPI != null)
-                        {
-                            if (_currentTextByGroup.TryGetValue(groupNumber, out var messageIDs))
-                            {
-                                foreach (int messageID in messageIDs)
-                                {
-                                    checkAPI.UpdateWorldText(messageID, linesList);
-                                }
-                            }
-                        }
-                    });
+        private void EnsureTextLoaded(string mapName)
+        {
+            if (string.IsNullOrEmpty(mapName) || _textLoadedForMap == mapName)
+                return;
+
+            if (TryGetSharedApi() is null)
+            {
+                Logger.LogWarning("K4-WorldText-API not available yet, skipping text load for {Map}.", mapName);
+                return;
+            }
+
+            _textLoadedForMap = mapName;
+
+            if (!Config.EnableDatabase)
+            {
+                LoadWorldTextFromJson(mapName);
+                return;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await EnsureTablesAsync().ConfigureAwait(false);
+                    Server.NextWorldUpdate(() => LoadWorldTextFromDb());
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error loading WorldText info from database. Please check your credentials.");
+                    Server.NextWorldUpdate(() => LoadWorldTextFromJson());
                 }
             });
         }
 
-        // Remove all current lists and reload them
+        // Remove all current text and reload it
         private void RefreshText()
         {
             var api = Capability_SharedAPI.Get();
@@ -507,10 +506,8 @@ namespace WorldText
             }
             _currentTextByGroup.Clear();
 
-            if (Config.EnableDatabase)
-                LoadWorldTextFromDb();
-            else
-                LoadWorldTextFromJson();
+            _textLoadedForMap = null;
+            EnsureTextLoaded(Server.MapName);
         }
 
         private static bool TryParseFloatInv(string s, out float f) =>
