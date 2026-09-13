@@ -220,47 +220,64 @@ namespace WorldText
 
                 if (totalQueued == 0) return;
 
-
-                const int importsPerFrame = 1;
-                int index = 0;
-
-                Action pump = null!;
-                pump = () =>
+                int inserted;
+                try
                 {
-                    int doneThisFrame = 0;
-                    while (index < totalQueued && doneThisFrame < importsPerFrame)
-                    {
-                        var e = importQueue[index++];
-                        try
-                        {
-                            var loc = new Vector(e.X, e.Y, e.Z);
-                            var ang = new QAngle(e.Pitch, e.Yaw, e.Roll);
+                    inserted = await SaveWorldTextBatchToDb(importQueue).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "[World-Text] Import batch insert failed");
+                    Server.NextWorldUpdate(() => player.PrintToChat($"{chatPrefix} {ChatColors.Red}Database import failed (check logs)"));
+                    return;
+                }
 
-                            SaveWorldTextToDb(e.MapName, e.GroupNumber, loc, ang).GetAwaiter().GetResult();
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.LogError(ex, $"[World-Text] Import insert failed for {e.MapName}/Group {e.GroupNumber}");
-                        }
-                        doneThisFrame++;
-                    }
-
-                    if (index < totalQueued)
-                    {
-                        Server.NextWorldUpdate(pump);
-                    }
-                    else
-                    {
-                        Server.NextWorldUpdate(() =>
-                        {
-                            RefreshText();
-                            player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Database import completed! {ChatColors.White}{totalQueued}{ChatColors.Lime} placements imported!");
-                        });
-                    }
-                };
-
-                Server.NextWorldUpdate(pump);
+                Server.NextWorldUpdate(() =>
+                {
+                    RefreshText();
+                    player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Database import completed! {ChatColors.White}{inserted}{ChatColors.Lime} of {ChatColors.White}{totalQueued}{ChatColors.Lime} placements imported!");
+                });
             });
+        }
+
+        private const int ImportBatchSize = 200;
+
+        private static string FloatToStringInvariant(float v) =>
+            v.ToString("0.###", CultureInfo.InvariantCulture);
+
+        private async Task<int> SaveWorldTextBatchToDb(IReadOnlyList<ImportEntry> entries)
+        {
+            string table = $"{Config.DatabaseSettings.TableName}";
+            using var conn = CreateDbConnection();
+
+            int inserted = 0;
+
+            for (int offset = 0; offset < entries.Count; offset += ImportBatchSize)
+            {
+                int count = Math.Min(ImportBatchSize, entries.Count - offset);
+
+                var rows = new List<string>(count);
+                var parameters = new DynamicParameters();
+
+                for (int i = 0; i < count; i++)
+                {
+                    var e = entries[offset + i];
+
+                    rows.Add($"(@m{i},@g{i},@loc{i},@ang{i})");
+                    parameters.Add($"m{i}", e.MapName);
+                    parameters.Add($"g{i}", e.GroupNumber);
+                    parameters.Add($"loc{i}", $"{FloatToStringInvariant(e.X)} {FloatToStringInvariant(e.Y)} {FloatToStringInvariant(e.Z)}");
+                    parameters.Add($"ang{i}", $"{FloatToStringInvariant(e.Pitch)} {FloatToStringInvariant(e.Yaw)} {FloatToStringInvariant(e.Roll)}");
+                }
+
+                string sql = $@"
+                    INSERT IGNORE INTO `{table}` (`MapName`,`GroupNumber`,`Location`,`Angle`)
+                    VALUES {string.Join(",", rows)};";
+
+                inserted += await conn.ExecuteAsync(sql, parameters).ConfigureAwait(false);
+            }
+
+            return inserted;
         }
 
         private sealed class ImportEntry
