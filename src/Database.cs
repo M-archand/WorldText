@@ -18,7 +18,11 @@ namespace WorldText
 
         private void InitializeDatabaseConnectionString()
         {
-            if (!Config.EnableDatabase) return;
+            if (!Config.EnableDatabase)
+            {
+                _connectionString = null;
+                return;
+            }
 
             var csb = new MySqlConnectionStringBuilder
             {

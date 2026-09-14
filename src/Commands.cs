@@ -22,7 +22,19 @@ namespace WorldText
                 return;
             }
 
-            Config.Reload();
+            try
+            {
+                Config.Reload();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "[World-Text] Failed to reload the config file.");
+                command.ReplyToCommand($"{chatPrefix} {ChatColors.LightRed}Failed to reload the config (check logs). Placement was not reloaded.");
+                return;
+            }
+
+            InitializeDatabaseConnectionString();
+
             Server.NextWorldUpdate(() => RefreshText());
             player.PrintToChat($" {ChatColors.Lime}WorldText config & placement has been reloaded!");
         }
