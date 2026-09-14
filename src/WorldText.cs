@@ -27,6 +27,7 @@ namespace WorldText
         public static PluginCapability<IK4WorldTextSharedAPI> Capability_SharedAPI { get; } = new("k4-worldtext:sharedapi");
         private bool _hasMenuManager;
         private readonly Dictionary<int, List<int>> _currentTextByGroup = new();
+        private readonly Dictionary<ulong, int> _k4IdByDbId = new();
         private string? _textLoadedForMap;
         private int _loadGeneration;
         private static readonly string chatPrefix = $" {ChatColors.Purple}[{ChatColors.LightPurple}World-Text{ChatColors.Purple}]";
@@ -204,6 +205,7 @@ namespace WorldText
 
                 // Remove from the world
                 RemoveTrackedText(checkAPI, targetMsgId.Value);
+                ForgetDbLink(targetMsgId.Value);
                 if (_currentTextByGroup.TryGetValue(targetGroup, out var list))
                     list.Remove(targetMsgId.Value);
 
@@ -370,6 +372,7 @@ namespace WorldText
                                 if (!_currentTextByGroup.ContainsKey(rec.GroupNumber))
                                     _currentTextByGroup[rec.GroupNumber] = new List<int>();
                                 _currentTextByGroup[rec.GroupNumber].Add(id);
+                                _k4IdByDbId[rec.Id] = id;
                             }
                         }
                         catch (Exception ex)
@@ -462,6 +465,7 @@ namespace WorldText
         private void ClearTrackedText()
         {
             _currentTextByGroup.Clear();
+            _k4IdByDbId.Clear();
             _textLoadedForMap = null;
             _loadGeneration++;
         }
@@ -477,6 +481,35 @@ namespace WorldText
             catch (Exception ex)
             {
                 Logger.LogDebug(ex, "WorldText id {Id} was already removed from K4-WorldText-API.", id);
+            }
+        }
+
+        private void ForgetDbLink(int k4Id)
+        {
+            foreach (var dbId in _k4IdByDbId.Where(kvp => kvp.Value == k4Id).Select(kvp => kvp.Key).ToList())
+                _k4IdByDbId.Remove(dbId);
+        }
+
+        // Move one placement without touching the rest of the map
+        private bool TryMoveTrackedText(ulong dbId, Vector location, QAngle rotation)
+        {
+            if (!_k4IdByDbId.TryGetValue(dbId, out var k4Id))
+                return false;
+
+            var api = TryGetSharedApi();
+            if (api is null)
+                return false;
+
+            try
+            {
+                api.TeleportWorldText(k4Id, location, rotation, modifyConfig: false);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "TeleportWorldText failed for id {Id}; falling back to a full refresh.", k4Id);
+                _k4IdByDbId.Remove(dbId);
+                return false;
             }
         }
 

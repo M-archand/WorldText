@@ -224,8 +224,12 @@ namespace WorldText
                         return;
                     }
 
-                    // Reload only after the UPDATE has completed
-                    Server.NextWorldUpdate(() => RefreshText());
+                    // Move only after the UPDATE has completed
+                    Server.NextWorldUpdate(() =>
+                    {
+                        if (!TryMoveTrackedText(slot.Id, newPos, newRot))
+                            RefreshText();
+                    });
                 });
 
                 slot.Pos = newPos;
