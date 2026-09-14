@@ -173,7 +173,9 @@ namespace WorldText
                 return;
             }
             else
-                Server.NextWorldUpdate(() => RemoveClosestJsonText(player, command));
+            {
+                RemoveClosestJsonText(player);
+            }
         }
     }
 }

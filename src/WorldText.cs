@@ -227,7 +227,7 @@ namespace WorldText
             }
         }
 
-        public void RemoveClosestJsonText(CCSPlayerController player, CommandInfo command)
+        private void RemoveClosestJsonText(CCSPlayerController player)
         {
             var checkAPI = TryGetSharedApi();
             if (checkAPI is null) return;
@@ -258,7 +258,7 @@ namespace WorldText
 
             if (target is null)
             {
-                command.ReplyToCommand($"{chatPrefix} {ChatColors.Red}Move within 200 units of the text that you want to remove.");
+                player.PrintToChat($"{chatPrefix} {ChatColors.Red}Move within 200 units of the text that you want to remove.");
                 return;
             }
 
