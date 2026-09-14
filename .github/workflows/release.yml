@@ -1,0 +1,206 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from ModuleVersion
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oP 'ModuleVersion\s*=>\s*\$?"\K[^"]+' src/WorldText.cs | head -n1)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not find ModuleVersion in src/WorldText.cs"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Found version: $VERSION"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: "**/*.csproj"
+
+      - name: Build WorldText plugin
+        run: |
+          set -euo pipefail
+          dotnet restore WorldText.csproj
+          dotnet build WorldText.csproj -c Release --no-restore
+
+      - name: Assemble release package
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          FOLDER="WorldText-v${VERSION}"
+          PLUGIN_OUT="bin/Release/net10.0"
+
+          if [ ! -f "${PLUGIN_OUT}/WorldText.dll" ]; then
+            echo "::error::WorldText.dll not found in ${PLUGIN_OUT} after build"
+            exit 1
+          fi
+
+          # CSS install layout: archive root holds WorldText-v{version}/
+          #   addons/counterstrikesharp/plugins/WorldText/ -> plugin dll + deps + runtime deps
+          # Note: K4-WorldText-API is a required separate dependency and is NOT bundled here.
+          rm -rf package
+          ROOT="package/${FOLDER}"
+          PLUGIN_DIR="${ROOT}/addons/counterstrikesharp/plugins/WorldText"
+          mkdir -p "${PLUGIN_DIR}"
+
+          # Plugin assembly + runtime deps manifest (pdb excluded)
+          cp "${PLUGIN_OUT}/WorldText.dll" "${PLUGIN_DIR}/"
+          cp "${PLUGIN_OUT}/WorldText.deps.json" "${PLUGIN_DIR}/"
+
+          # Runtime dependencies copied by the csproj build target
+          cp "${PLUGIN_OUT}/Dapper.dll" "${PLUGIN_DIR}/"
+          cp "${PLUGIN_OUT}/MySqlConnector.dll" "${PLUGIN_DIR}/"
+
+          cd package
+          zip -r "../${FOLDER}.zip" "${FOLDER}"
+          cd ..
+          echo "Created ${FOLDER}.zip"
+
+      - name: Prepare release artifact
+        id: zip
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+
+          ZIP_SRC=$(find . -name "WorldText-v${VERSION}.zip" -not -path "./release-artifacts/*" | head -1)
+          if [ -z "$ZIP_SRC" ]; then
+            echo "::error::WorldText-v${VERSION}.zip not found after build"
+            exit 1
+          fi
+          echo "Found zip: $ZIP_SRC"
+
+          mkdir -p release-artifacts
+          NEW_NAME="WorldText-v${VERSION}.zip"
+          mv "$ZIP_SRC" "release-artifacts/$NEW_NAME"
+          echo "artifact=release-artifacts/$NEW_NAME" >> $GITHUB_OUTPUT
+          echo "Prepared: $NEW_NAME"
+
+      - name: Verify release package
+        run: |
+          set -euo pipefail
+          ARTIFACT="${{ steps.zip.outputs.artifact }}"
+          PLUGIN_PATH="addons/counterstrikesharp/plugins/WorldText"
+
+          # Archive must be a readable, uncorrupted zip.
+          unzip -t "$ARTIFACT" > /dev/null
+
+          unzip -l "$ARTIFACT" > listing.txt
+          cat listing.txt
+
+          FAILED=0
+          for FILE in WorldText.dll WorldText.deps.json Dapper.dll MySqlConnector.dll; do
+            SIZE=$(awk -v f="${PLUGIN_PATH}/${FILE}" '$4 ~ f"$" { print $1; exit }' listing.txt)
+            if [ -z "$SIZE" ]; then
+              echo "::error::${FILE} missing from release package"
+              FAILED=1
+            elif [ "$SIZE" -eq 0 ]; then
+              echo "::error::${FILE} is empty in release package"
+              FAILED=1
+            else
+              echo "OK: ${FILE} (${SIZE} bytes)"
+            fi
+          done
+
+          # A stray pdb or unexpected payload means the packaging step drifted.
+          COUNT=$(unzip -Z1 "$ARTIFACT" | grep -cv '/$' || true)
+          if [ "$COUNT" -ne 4 ]; then
+            echo "::error::Expected 4 files in release package, found ${COUNT}"
+            FAILED=1
+          fi
+
+          [ "$FAILED" -eq 0 ] || exit 1
+          echo "Release package verified"
+
+      - name: Determine release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          REPO_NAME="${{ github.event.repository.name }}"
+          BASE_TAG="v${VERSION}"
+          TAG="$BASE_TAG"
+          TITLE="${BASE_TAG}"
+          BUILD_NUM=1
+
+          while gh release view "$TAG" &>/dev/null; do
+            BUILD_NUM=$((BUILD_NUM + 1))
+            TAG="${BASE_TAG}-${BUILD_NUM}"
+            TITLE="${REPO_NAME} | ${BASE_TAG}#${BUILD_NUM}"
+            echo "Tag exists, trying: $TAG"
+          done
+
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "Using tag: $TAG"
+
+      - name: Get previous tag for changelog link
+        id: prev_tag
+        run: |
+          set -euo pipefail
+          PREV=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "prev_tag=$PREV" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.tag.outputs.tag }}"
+          TITLE="${{ steps.tag.outputs.title }}"
+          PREV_TAG="${{ steps.prev_tag.outputs.prev_tag }}"
+
+          PRERELEASE_FLAG=""
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          # Pull this version's section out of CHANGELOG.md (header line excluded).
+          # Matches both "## [x.y.z](...)" and "### [x.y.z](...)" style headings.
+          NOTES_FILE="release_notes.md"
+          if [ -f CHANGELOG.md ]; then
+            awk -v ver="$VERSION" '
+              found && /^##+ \[/ { exit }
+              $0 ~ ("^##+ \\[" ver "\\]") { found=1; next }
+              found { print }
+            ' CHANGELOG.md > "$NOTES_FILE"
+          else
+            : > "$NOTES_FILE"
+          fi
+
+          if [ ! -s "$NOTES_FILE" ]; then
+            echo "::warning::No CHANGELOG.md entry found for ${VERSION}, using default release notes"
+            echo "Release ${TAG}" > "$NOTES_FILE"
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            printf '\n\n**Full Changelog**: https://github.com/%s/compare/%s...%s\n' "${{ github.repository }}" "$PREV_TAG" "$TAG" >> "$NOTES_FILE"
+          fi
+
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes-file "$NOTES_FILE" \
+            $PRERELEASE_FLAG \
+            "${{ steps.zip.outputs.artifact }}"
+
+          echo "Release $TAG created successfully!"
