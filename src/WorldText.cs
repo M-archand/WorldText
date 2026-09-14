@@ -36,14 +36,8 @@ namespace WorldText
 
         public override void OnAllPluginsLoaded(bool hotReload)
         {
-            try
-            {
-                var _k4 = Capability_SharedAPI.Get();
-            }
-            catch (Exception)
-            {
+            if (TryGetSharedApi() is null)
                 Logger.LogError("You don't have K4-WorldText-API installed. It is required. Download it from https://github.com/M-archand/K4-WorldText-API/releases");
-            }
 
 
             RegisterListener<Listeners.OnMapStart>((mapName) =>
@@ -157,7 +151,7 @@ namespace WorldText
         {
             try
             {
-                var checkAPI = Capability_SharedAPI.Get();
+                var checkAPI = TryGetSharedApi();
                 if (checkAPI is null)
                 {
                     Server.NextFrame(() =>
@@ -232,7 +226,7 @@ namespace WorldText
 
         public void RemoveClosestJsonText(CCSPlayerController player, CommandInfo command)
         {
-            var checkAPI = Capability_SharedAPI.Get();
+            var checkAPI = TryGetSharedApi();
             if (checkAPI is null) return;
 
             PruneDeadTextIds(checkAPI);
@@ -317,7 +311,7 @@ namespace WorldText
 
                         Server.NextWorldUpdate(() =>
                         {
-                            var checkAPI = Capability_SharedAPI.Get();
+                            var checkAPI = TryGetSharedApi();
                             if (checkAPI != null && !string.IsNullOrEmpty(worldTextData.Location) && !string.IsNullOrEmpty(worldTextData.Rotation))
                             {
                                 var messageID = checkAPI.AddWorldText(TextPlacement.Wall, linesList, ParseVector(worldTextData.Location), ParseQAngle(worldTextData.Rotation));
@@ -353,7 +347,7 @@ namespace WorldText
                     {
                         try
                         {
-                            var api = Capability_SharedAPI.Get();
+                            var api = TryGetSharedApi();
                             if (api is null) return;
 
                             foreach (var rec in rows)

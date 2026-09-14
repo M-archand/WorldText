@@ -40,7 +40,7 @@ namespace WorldText
 
             var map = Server.MapName;
 
-            var api = Capability_SharedAPI.Get();
+            var api = TryGetSharedApi();
             if (api is null)
             {
                 command.ReplyToCommand($"{chatPrefix} {ChatColors.LightRed}K4-WorldText-API missing.");
@@ -121,7 +121,7 @@ namespace WorldText
             }
 
             var mapName = Server.MapName;
-            var api = Capability_SharedAPI.Get();
+            var api = TryGetSharedApi();
             if (api == null)
             {
                 command.ReplyToCommand($"{chatPrefix} {ChatColors.LightRed}K4-WorldText-API missing.");
