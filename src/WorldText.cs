@@ -26,7 +26,7 @@ namespace WorldText
         public required PluginConfig Config { get; set; } = new PluginConfig();
         public static PluginCapability<IK4WorldTextSharedAPI> Capability_SharedAPI { get; } = new("k4-worldtext:sharedapi");
         private bool _hasMenuManager;
-        private Dictionary<int, List<int>> _currentTextByGroup = new();
+        private readonly Dictionary<int, List<int>> _currentTextByGroup = new();
         private string? _textLoadedForMap;
         private static readonly string chatPrefix = $" {ChatColors.Purple}[{ChatColors.LightPurple}World-Text{ChatColors.Purple}]";
         private readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions
@@ -55,15 +55,7 @@ namespace WorldText
 
             RegisterListener<Listeners.OnMapEnd>(() =>
             {
-                var checkAPI = Capability_SharedAPI.Get();
-                if (checkAPI != null)
-                {
-                    foreach (var ids in _currentTextByGroup.Values)
-                        foreach (var id in ids)
-                            checkAPI.RemoveWorldText(id, false);
-                }
-                _currentTextByGroup.Clear();
-                _textLoadedForMap = null;
+                ClearTrackedText();
             });
 
             // Check for CS2MenuManager installation
@@ -92,9 +84,6 @@ namespace WorldText
             if (Config.EnableDatabase)
                 InitializeDatabaseConnectionString();
 
-            // Text is not spawned here. OnConfigParsed runs before OnAllPluginsLoaded, so the
-            // K4-WorldText-API capability may not resolve yet. EnsureTextLoaded is driven by
-            // OnMapStart and the catch-up timer instead, and is idempotent per map.
 
             AddCommand($"css_{Config.AddCommand}", "Add text in front of you", OnTextAdd);
             AddCommand($"css_{Config.RemoveCommand}", "Removes the closest group of text", OnTextRemove);
@@ -105,16 +94,20 @@ namespace WorldText
 
         public override void Unload(bool hotReload)
         {
-            var checkAPI = Capability_SharedAPI.Get();
-            if (checkAPI != null)
+            try
             {
-                foreach (var groupTextList in _currentTextByGroup.Values)
+                var checkAPI = TryGetSharedApi();
+                if (checkAPI != null)
                 {
-                    groupTextList.ForEach(id => checkAPI.RemoveWorldText(id, false));
+                    foreach (var groupTextList in _currentTextByGroup.Values)
+                        foreach (var id in groupTextList)
+                            RemoveTrackedText(checkAPI, id);
                 }
             }
-            _currentTextByGroup.Clear();
-            _textLoadedForMap = null;
+            finally
+            {
+                ClearTrackedText();
+            }
         }
 
         private void SaveWorldTextToFile(Vector location, QAngle rotation, int groupNumber)
@@ -173,6 +166,8 @@ namespace WorldText
                     return false;
                 }
 
+                PruneDeadTextIds(checkAPI);
+
                 // Find nearest list
                 int? targetMsgId = null;
                 int targetGroup = -1;
@@ -213,7 +208,7 @@ namespace WorldText
                 }
 
                 // Remove from the world
-                checkAPI.RemoveWorldText(targetMsgId.Value, false);
+                RemoveTrackedText(checkAPI, targetMsgId.Value);
                 if (_currentTextByGroup.TryGetValue(targetGroup, out var list))
                     list.Remove(targetMsgId.Value);
 
@@ -239,6 +234,8 @@ namespace WorldText
         {
             var checkAPI = Capability_SharedAPI.Get();
             if (checkAPI is null) return;
+
+            PruneDeadTextIds(checkAPI);
 
             dynamic? target = null;
             int groupWithTarget = -1;
@@ -268,7 +265,7 @@ namespace WorldText
                 return;
             }
 
-            checkAPI.RemoveWorldText(target.Id, false);
+            RemoveTrackedText(checkAPI, target.Id);
 
             if (groupWithTarget != -1)
             {
@@ -459,6 +456,46 @@ namespace WorldText
             }
         }
 
+        private void ClearTrackedText()
+        {
+            _currentTextByGroup.Clear();
+            _textLoadedForMap = null;
+        }
+
+        // K4 with throw for ids it no longer tracks,
+        // therefore, treat those as already gone.
+        private void RemoveTrackedText(IK4WorldTextSharedAPI api, int id)
+        {
+            try
+            {
+                api.RemoveWorldText(id, false);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "WorldText id {Id} was already removed from K4-WorldText-API.", id);
+            }
+        }
+
+        // Drop tracked ids that K4 no longer knows so nearest text searches cannot throw
+        private void PruneDeadTextIds(IK4WorldTextSharedAPI api)
+        {
+            foreach (var ids in _currentTextByGroup.Values)
+            {
+                ids.RemoveAll(id =>
+                {
+                    try
+                    {
+                        api.GetWorldTextLineEntities(id);
+                        return false;
+                    }
+                    catch (Exception)
+                    {
+                        return true;
+                    }
+                });
+            }
+        }
+
         private void EnsureTextLoaded(string mapName)
         {
             if (string.IsNullOrEmpty(mapName) || _textLoadedForMap == mapName)
@@ -496,17 +533,21 @@ namespace WorldText
         // Remove all current text and reload it
         private void RefreshText()
         {
-            var api = Capability_SharedAPI.Get();
-            if (api != null)
+            try
             {
-                foreach (var kvp in _currentTextByGroup)
+                var api = TryGetSharedApi();
+                if (api != null)
                 {
-                    foreach (var id in kvp.Value) api.RemoveWorldText(id);
+                    foreach (var kvp in _currentTextByGroup)
+                        foreach (var id in kvp.Value)
+                            RemoveTrackedText(api, id);
                 }
             }
-            _currentTextByGroup.Clear();
+            finally
+            {
+                ClearTrackedText();
+            }
 
-            _textLoadedForMap = null;
             EnsureTextLoaded(Server.MapName);
         }
 
