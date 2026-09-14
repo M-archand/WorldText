@@ -117,13 +117,14 @@ namespace WorldText
             player.PrintToChat($"{chatPrefix} {ChatColors.White}Scanning {ChatColors.Lime}/plugins/WorldText/maps {ChatColors.White}folder");
 
             int generation = _loadGeneration;
+            int playerSlot = player.Slot;
 
             _ = Task.Run(async () =>
             {
                 var mapsDir = Path.Combine(ModuleDirectory, "maps");
                 if (!Directory.Exists(mapsDir))
                 {
-                    Server.NextWorldUpdate(() => player.PrintToChat($"{chatPrefix} {ChatColors.Red}No maps folder found at {mapsDir}"));
+                    PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.Red}No maps folder found at {mapsDir}");
                     return;
                 }
 
@@ -135,7 +136,7 @@ namespace WorldText
                 catch (Exception ex)
                 {
                     Logger.LogError(ex, "[World-Text] Error reading maps directory");
-                    Server.NextWorldUpdate(() => player.PrintToChat($"{chatPrefix} {ChatColors.Red}Failed to read {mapsDir} (check logs)"));
+                    PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.Red}Failed to read {mapsDir} (check logs)");
                     return;
                 }
 
@@ -207,12 +208,9 @@ namespace WorldText
 
                 var totalQueued = importQueue.Count;
 
-                Server.NextWorldUpdate(() =>
-                {
-                    player.PrintToChat($"{chatPrefix} {ChatColors.White}Queued {totalQueued} placements from {filesTouched} files");
-                    if (totalQueued == 0)
-                        player.PrintToChat($"{chatPrefix} {ChatColors.Red}Nothing to import");
-                });
+                PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.White}Queued {totalQueued} placements from {filesTouched} files");
+                if (totalQueued == 0)
+                    PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.Red}Nothing to import");
 
                 if (totalQueued == 0) return;
 
@@ -224,14 +222,12 @@ namespace WorldText
                 catch (Exception ex)
                 {
                     Logger.LogError(ex, "[World-Text] Import batch insert failed");
-                    Server.NextWorldUpdate(() => player.PrintToChat($"{chatPrefix} {ChatColors.Red}Database import failed (check logs)"));
+                    PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.Red}Database import failed (check logs)");
                     return;
                 }
 
                 QueueTextUpdate(generation, RefreshText);
-                Server.NextWorldUpdate(() =>
-                    player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Database import completed! {ChatColors.White}{inserted}{ChatColors.Lime} of {ChatColors.White}{totalQueued}{ChatColors.Lime} placements imported!")
-                );
+                PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.Lime}Database import completed! {ChatColors.White}{inserted}{ChatColors.Lime} of {ChatColors.White}{totalQueued}{ChatColors.Lime} placements imported!");
             });
         }
 

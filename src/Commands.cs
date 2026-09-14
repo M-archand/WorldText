@@ -73,12 +73,16 @@ namespace WorldText
 
             var linesList = GetTextLines(groupNumber);
             int generation = _loadGeneration;
+            int playerSlot = player.Slot;
 
             QueueTextUpdate(generation, () =>
             {
                 try
                 {
-                    int messageID = api.AddWorldTextAtPlayer(player, TextPlacement.Wall, linesList);
+                    var owner = ValidPlayer(playerSlot);
+                    if (owner is null) return;
+
+                    int messageID = api.AddWorldTextAtPlayer(owner, TextPlacement.Wall, linesList);
 
                     if (!_currentTextByGroup.ContainsKey(groupNumber))
                         _currentTextByGroup[groupNumber] = new List<int>();
@@ -112,7 +116,6 @@ namespace WorldText
                             {
                                 var savePos = new Vector(location.X, location.Y, location.Z);
                                 var saveRot = new QAngle(rotation.X, rotation.Y, rotation.Z);
-                                var slot = player.Slot;
 
                                 _ = Task.Run(async () =>
                                 {
@@ -123,12 +126,7 @@ namespace WorldText
                                     catch (Exception ex)
                                     {
                                         Logger.LogError(ex, "[World-Text] SaveWorldTextToDb failed for group {Group} on {Map}.", groupNumber, map);
-                                        Server.NextWorldUpdate(() =>
-                                        {
-                                            var p = Utilities.GetPlayerFromSlot(slot);
-                                            if (p == null || !p.IsValid) return;
-                                            p.PrintToChat($"{chatPrefix} {ChatColors.Red}Text was placed but could not be saved to the database (check logs).");
-                                        });
+                                        PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.Red}Text was placed but could not be saved to the database (check logs).");
                                     }
                                 });
                             }
@@ -170,7 +168,7 @@ namespace WorldText
 
             if (Config.EnableDatabase)
             {
-                _ = RemoveClosestDbText(mapName, atPos, player);
+                _ = RemoveClosestDbText(mapName, atPos, player.Slot);
                 return;
             }
             else

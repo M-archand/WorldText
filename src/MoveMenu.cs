@@ -88,6 +88,7 @@ namespace WorldText
         private void ShowPlacementsRootMenu(CCSPlayerController player)
         {
             var map = Server.MapName;
+            int playerSlot = player.Slot;
 
             _ = Task.Run(async () =>
             {
@@ -99,12 +100,15 @@ namespace WorldText
                 catch (Exception ex)
                 {
                     Logger.LogError(ex, "[World-Text] Failed to load DB placements for menu.");
-                    Server.NextFrame(() => player.PrintToChat($"{chatPrefix} {ChatColors.LightRed}Failed to load placements from DB."));
+                    PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.LightRed}Failed to load placements from DB.");
                     return;
                 }
 
                 Server.NextFrame(() =>
                 {
+                    var owner = ValidPlayer(playerSlot);
+                    if (owner is null) return;
+
                     var slots = new List<DbPlacement>(raw.Count);
                     foreach (var r in raw)
                     {
@@ -122,7 +126,7 @@ namespace WorldText
 
                     if (slots.Count == 0)
                     {
-                        player.PrintToChat($"{chatPrefix} {ChatColors.LightRed}No Wall-Text placements found for this map.");
+                        owner.PrintToChat($"{chatPrefix} {ChatColors.LightRed}No Wall-Text placements found for this map.");
                         return;
                     }
 
@@ -136,7 +140,7 @@ namespace WorldText
                         });
                         opt.PostSelectAction = PostSelectAction.Nothing;
                     }
-                    root.Display(player, 0);
+                    root.Display(owner, 0);
                 });
             });
         }
@@ -216,12 +220,7 @@ namespace WorldText
                     catch (Exception ex)
                     {
                         Logger.LogError(ex, "[World-Text] UpdatePlacementInDb failed for Id {Id}.", slot.Id);
-                        Server.NextWorldUpdate(() =>
-                        {
-                            var pl = Utilities.GetPlayerFromSlot(playerSlot);
-                            if (pl == null || !pl.IsValid) return;
-                            pl.PrintToChat($"{chatPrefix} {ChatColors.Red}Failed to save the new position to the database (check logs).");
-                        });
+                        PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.Red}Failed to save the new position to the database (check logs).");
                         return;
                     }
 
@@ -241,7 +240,12 @@ namespace WorldText
                     ? $"Move Group {slot.GroupNumber} • Id {slot.Id}"
                     : $"Rotate Group {slot.GroupNumber} • Id {slot.Id}";
 
-                Server.NextFrame(() => menu.DisplayAt(p, idx, menu.MenuTime));
+                Server.NextFrame(() =>
+                {
+                    var owner = ValidPlayer(playerSlot);
+                    if (owner is not null)
+                        menu.DisplayAt(owner, idx, menu.MenuTime);
+                });
             });
 
             item.PostSelectAction = PostSelectAction.Nothing;

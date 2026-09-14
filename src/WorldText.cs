@@ -2,7 +2,6 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Capabilities;
-using CounterStrikeSharp.API.Modules.Extensions;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -67,8 +66,6 @@ namespace WorldText
                 _hasMenuManager = false;
                 Server.PrintToConsole("[World-Text] CS2MenuManager API not found! Move menu command has been disabled.");
             }
-
-            Config.Reload();
         }
 
         public void OnConfigParsed(PluginConfig config)
@@ -166,7 +163,7 @@ namespace WorldText
             await conn.ExecuteAsync(sql, new { m = mapName, g = group, loc, ang });
         }
 
-        private async Task<bool> RemoveClosestDbText(string mapName, Vector playerPos, CCSPlayerController player)
+        private async Task<bool> RemoveClosestDbText(string mapName, Vector playerPos, int playerSlot)
         {
             int generation = _loadGeneration;
 
@@ -175,9 +172,7 @@ namespace WorldText
                 var checkAPI = TryGetSharedApi();
                 if (checkAPI is null)
                 {
-                    Server.NextFrame(() =>
-                        player.PrintToChat($"{chatPrefix} {ChatColors.LightRed}K4-WorldText-API missing.")
-                    );
+                    PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.LightRed}K4-WorldText-API missing.");
                     return false;
                 }
 
@@ -216,9 +211,7 @@ namespace WorldText
 
                 if (targetMsgId == null || targetGroup == -1 || targetLoc == null || targetAng == null)
                 {
-                    Server.NextFrame(() =>
-                        player.PrintToChat($"{chatPrefix} {ChatColors.LightRed}Move closer to the text you want to remove.")
-                    );
+                    PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.LightRed}Move closer to the text you want to remove.");
                     return false;
                 }
 
@@ -231,9 +224,7 @@ namespace WorldText
                 // Delete the matching row from DB
                 await DeleteWorldTextFromDb(mapName, targetGroup, targetLoc, targetAng);
 
-                Server.NextFrame(() =>
-                    player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Removed one placement from {ChatColors.White}Group {targetGroup} {ChatColors.Lime}on {ChatColors.White}{mapName}")
-                );
+                PrintToSlot(playerSlot, $"{chatPrefix} {ChatColors.Lime}Removed one placement from {ChatColors.White}Group {targetGroup} {ChatColors.Lime}on {ChatColors.White}{mapName}");
                 QueueTextUpdate(generation, RefreshText);
 
                 return true;
@@ -522,6 +513,17 @@ namespace WorldText
         }
 
         private bool IsCurrentGeneration(int generation) => !_unloaded && generation == _loadGeneration;
+
+        private static CCSPlayerController? ValidPlayer(int slot)
+        {
+            var player = Utilities.GetPlayerFromSlot(slot);
+            return player != null && player.IsValid ? player : null;
+        }
+
+        private static void PrintToSlot(int slot, string message)
+        {
+            Server.NextWorldUpdate(() => ValidPlayer(slot)?.PrintToChat(message));
+        }
 
         private void QueueTextUpdate(int generation, Action action)
         {
