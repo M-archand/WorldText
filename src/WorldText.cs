@@ -28,6 +28,7 @@ namespace WorldText
         private bool _hasMenuManager;
         private readonly Dictionary<int, List<int>> _currentTextByGroup = new();
         private string? _textLoadedForMap;
+        private int _loadGeneration;
         private static readonly string chatPrefix = $" {ChatColors.Purple}[{ChatColors.LightPurple}World-Text{ChatColors.Purple}]";
         private readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions
         {
@@ -292,8 +293,10 @@ namespace WorldText
             player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Removed one placement from {ChatColors.White}Group {groupWithTarget} {ChatColors.Lime}on {ChatColors.White}{mapName}");
         }
 
-        private void LoadWorldTextFromJson(string? passedMapName = null)
+        private void LoadWorldTextFromJson(int generation, string? passedMapName = null)
         {
+            if (generation != _loadGeneration) return;
+
             var mapName = passedMapName ?? Server.MapName;
             var mapsDirectory = Path.Combine(ModuleDirectory, "maps");
             var path = Path.Combine(mapsDirectory, $"{mapName}.json");
@@ -311,6 +314,8 @@ namespace WorldText
 
                         Server.NextWorldUpdate(() =>
                         {
+                            if (generation != _loadGeneration) return;
+
                             var checkAPI = TryGetSharedApi();
                             if (checkAPI != null && !string.IsNullOrEmpty(worldTextData.Location) && !string.IsNullOrEmpty(worldTextData.Rotation))
                             {
@@ -328,8 +333,10 @@ namespace WorldText
             }
         }
 
-        private void LoadWorldTextFromDb()
+        private void LoadWorldTextFromDb(int generation)
         {
+            if (generation != _loadGeneration) return;
+
             var mapName = Server.MapName;
             Task.Run(async () =>
             {
@@ -347,6 +354,8 @@ namespace WorldText
                     {
                         try
                         {
+                            if (generation != _loadGeneration) return;
+
                             var api = TryGetSharedApi();
                             if (api is null) return;
 
@@ -454,6 +463,7 @@ namespace WorldText
         {
             _currentTextByGroup.Clear();
             _textLoadedForMap = null;
+            _loadGeneration++;
         }
 
         // K4 with throw for ids it no longer tracks,
@@ -502,10 +512,11 @@ namespace WorldText
             }
 
             _textLoadedForMap = mapName;
+            int generation = _loadGeneration;
 
             if (!Config.EnableDatabase)
             {
-                LoadWorldTextFromJson(mapName);
+                LoadWorldTextFromJson(generation, mapName);
                 return;
             }
 
@@ -514,12 +525,12 @@ namespace WorldText
                 try
                 {
                     await EnsureTablesAsync().ConfigureAwait(false);
-                    Server.NextWorldUpdate(() => LoadWorldTextFromDb());
+                    Server.NextWorldUpdate(() => LoadWorldTextFromDb(generation));
                 }
                 catch (Exception ex)
                 {
                     Logger.LogError(ex, "Error loading WorldText info from database. Please check your credentials.");
-                    Server.NextWorldUpdate(() => LoadWorldTextFromJson());
+                    Server.NextWorldUpdate(() => LoadWorldTextFromJson(generation));
                 }
             });
         }
