@@ -204,16 +204,32 @@ namespace WorldText
                 var newPos = new Vector(slot.Pos.X + dPos.X, slot.Pos.Y + dPos.Y, slot.Pos.Z + dPos.Z);
                 var newRot = new QAngle(slot.Rot.X + dAng.X, slot.Rot.Y + dAng.Y, slot.Rot.Z + dAng.Z);
 
+                var playerSlot = p.Slot;
+
                 _ = Task.Run(async () =>
                 {
-                    try { await UpdatePlacementInDb(slot.Id, newPos, newRot); }
-                    catch (Exception ex) { Logger.LogError(ex, "[World-Text] UpdatePlacementInDb failed."); }
+                    try
+                    {
+                        await UpdatePlacementInDb(slot.Id, newPos, newRot);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "[World-Text] UpdatePlacementInDb failed for Id {Id}.", slot.Id);
+                        Server.NextWorldUpdate(() =>
+                        {
+                            var pl = Utilities.GetPlayerFromSlot(playerSlot);
+                            if (pl == null || !pl.IsValid) return;
+                            pl.PrintToChat($"{chatPrefix} {ChatColors.Red}Failed to save the new position to the database (check logs).");
+                        });
+                        return;
+                    }
+
+                    // Reload only after the UPDATE has completed
+                    Server.NextWorldUpdate(() => RefreshText());
                 });
 
                 slot.Pos = newPos;
                 slot.Rot = newRot;
-
-                Server.NextWorldUpdate(() => RefreshText());
 
                 // Keep the same selection highlighted
                 menu.Title = text.StartsWith("Move", StringComparison.OrdinalIgnoreCase)
