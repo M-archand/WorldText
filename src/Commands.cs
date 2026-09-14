@@ -96,9 +96,33 @@ namespace WorldText
                             }
 
                             if (Config.EnableDatabase)
-                                _ = SaveWorldTextToDb(map, groupNumber, location, rotation);
+                            {
+                                var savePos = new Vector(location.X, location.Y, location.Z);
+                                var saveRot = new QAngle(rotation.X, rotation.Y, rotation.Z);
+                                var slot = player.Slot;
+
+                                _ = Task.Run(async () =>
+                                {
+                                    try
+                                    {
+                                        await SaveWorldTextToDb(map, groupNumber, savePos, saveRot);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Logger.LogError(ex, "[World-Text] SaveWorldTextToDb failed for group {Group} on {Map}.", groupNumber, map);
+                                        Server.NextWorldUpdate(() =>
+                                        {
+                                            var p = Utilities.GetPlayerFromSlot(slot);
+                                            if (p == null || !p.IsValid) return;
+                                            p.PrintToChat($"{chatPrefix} {ChatColors.Red}Text was placed but could not be saved to the database (check logs).");
+                                        });
+                                    }
+                                });
+                            }
                             else
+                            {
                                 SaveWorldTextToFile(location, rotation, groupNumber);
+                            }
                         }
                     }
                 }
