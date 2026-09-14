@@ -15,9 +15,12 @@ namespace WorldText
     public partial class PluginWorldText : BasePlugin, IPluginConfig<PluginConfig>
     {
         private string? _connectionString;
+        private volatile bool _tablesEnsured;
 
         private void InitializeDatabaseConnectionString()
         {
+            _tablesEnsured = false;
+
             if (!Config.EnableDatabase)
             {
                 _connectionString = null;
@@ -49,7 +52,7 @@ namespace WorldText
 
         private async Task EnsureTablesAsync()
         {
-            if (!Config.EnableDatabase) return;
+            if (!Config.EnableDatabase || _tablesEnsured) return;
 
             string table = $"{Config.DatabaseSettings.TableName}";
             string sql = $@"
@@ -67,6 +70,8 @@ namespace WorldText
 
             using var conn = CreateDbConnection();
             await conn.ExecuteAsync(sql);
+
+            _tablesEnsured = true;
         }
 
         private sealed class WtTextRecord
