@@ -35,7 +35,7 @@ namespace WorldText
 
             InitializeDatabaseConnectionString();
 
-            Server.NextWorldUpdate(() => RefreshText());
+            QueueTextUpdate(_loadGeneration, RefreshText);
             player.PrintToChat($" {ChatColors.Lime}WorldText config & placement has been reloaded!");
         }
 
@@ -72,8 +72,9 @@ namespace WorldText
             }
 
             var linesList = GetTextLines(groupNumber);
+            int generation = _loadGeneration;
 
-            Server.NextWorldUpdate(() =>
+            QueueTextUpdate(generation, () =>
             {
                 try
                 {

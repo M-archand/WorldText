@@ -116,6 +116,8 @@ namespace WorldText
 
             player.PrintToChat($"{chatPrefix} {ChatColors.White}Scanning {ChatColors.Lime}/plugins/WorldText/maps {ChatColors.White}folder");
 
+            int generation = _loadGeneration;
+
             _ = Task.Run(async () =>
             {
                 var mapsDir = Path.Combine(ModuleDirectory, "maps");
@@ -226,11 +228,10 @@ namespace WorldText
                     return;
                 }
 
+                QueueTextUpdate(generation, RefreshText);
                 Server.NextWorldUpdate(() =>
-                {
-                    RefreshText();
-                    player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Database import completed! {ChatColors.White}{inserted}{ChatColors.Lime} of {ChatColors.White}{totalQueued}{ChatColors.Lime} placements imported!");
-                });
+                    player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Database import completed! {ChatColors.White}{inserted}{ChatColors.Lime} of {ChatColors.White}{totalQueued}{ChatColors.Lime} placements imported!")
+                );
             });
         }
 

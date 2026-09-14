@@ -29,6 +29,7 @@ namespace WorldText
         private readonly Dictionary<ulong, int> _k4IdByDbId = new();
         private string? _textLoadedForMap;
         private int _loadGeneration;
+        private bool _unloaded;
         private static readonly string chatPrefix = $" {ChatColors.Purple}[{ChatColors.LightPurple}World-Text{ChatColors.Purple}]";
         private readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions
         {
@@ -43,7 +44,8 @@ namespace WorldText
 
             RegisterListener<Listeners.OnMapStart>((mapName) =>
             {
-                Server.NextWorldUpdate(() => EnsureTextLoaded(mapName));
+                int generation = _loadGeneration;
+                QueueTextUpdate(generation, () => EnsureTextLoaded(mapName));
             });
 
             AddTimer(3, () => EnsureTextLoaded(Server.MapName), TimerFlags.STOP_ON_MAPCHANGE);
@@ -89,6 +91,8 @@ namespace WorldText
 
         public override void Unload(bool hotReload)
         {
+            _unloaded = true;
+
             try
             {
                 var checkAPI = TryGetSharedApi();
@@ -150,6 +154,8 @@ namespace WorldText
 
         private async Task<bool> RemoveClosestDbText(string mapName, Vector playerPos, CCSPlayerController player)
         {
+            int generation = _loadGeneration;
+
             try
             {
                 var checkAPI = TryGetSharedApi();
@@ -212,10 +218,9 @@ namespace WorldText
                 await DeleteWorldTextFromDb(mapName, targetGroup, targetLoc, targetAng);
 
                 Server.NextFrame(() =>
-                {
-                    player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Removed one placement from {ChatColors.White}Group {targetGroup} {ChatColors.Lime}on {ChatColors.White}{mapName}");
-                    RefreshText();
-                });
+                    player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Removed one placement from {ChatColors.White}Group {targetGroup} {ChatColors.Lime}on {ChatColors.White}{mapName}")
+                );
+                QueueTextUpdate(generation, RefreshText);
 
                 return true;
             }
@@ -301,7 +306,7 @@ namespace WorldText
 
         private void LoadWorldTextFromJson(int generation, string? passedMapName = null)
         {
-            if (generation != _loadGeneration) return;
+            if (!IsCurrentGeneration(generation)) return;
 
             var mapName = passedMapName ?? Server.MapName;
             var mapsDirectory = Path.Combine(ModuleDirectory, "maps");
@@ -318,10 +323,8 @@ namespace WorldText
                     {
                         var linesList = GetTextLines(worldTextData.GroupNumber);
 
-                        Server.NextWorldUpdate(() =>
+                        QueueTextUpdate(generation, () =>
                         {
-                            if (generation != _loadGeneration) return;
-
                             var checkAPI = TryGetSharedApi();
                             if (checkAPI != null && !string.IsNullOrEmpty(worldTextData.Location) && !string.IsNullOrEmpty(worldTextData.Rotation))
                             {
@@ -341,7 +344,7 @@ namespace WorldText
 
         private void LoadWorldTextFromDb(int generation)
         {
-            if (generation != _loadGeneration) return;
+            if (!IsCurrentGeneration(generation)) return;
 
             var mapName = Server.MapName;
             Task.Run(async () =>
@@ -356,12 +359,10 @@ namespace WorldText
                         FROM `{table}` WHERE `MapName`=@m;",
                         new { m = mapName });
 
-                    Server.NextWorldUpdate(() =>
+                    QueueTextUpdate(generation, () =>
                     {
                         try
                         {
-                            if (generation != _loadGeneration) return;
-
                             var api = TryGetSharedApi();
                             if (api is null) return;
 
@@ -474,6 +475,17 @@ namespace WorldText
             _loadGeneration++;
         }
 
+        private bool IsCurrentGeneration(int generation) => !_unloaded && generation == _loadGeneration;
+
+        private void QueueTextUpdate(int generation, Action action)
+        {
+            Server.NextWorldUpdate(() =>
+            {
+                if (!IsCurrentGeneration(generation)) return;
+                action();
+            });
+        }
+
         // K4 with throw for ids it no longer tracks,
         // therefore, treat those as already gone.
         private void RemoveTrackedText(IK4WorldTextSharedAPI api, int id)
@@ -539,7 +551,7 @@ namespace WorldText
 
         private void EnsureTextLoaded(string mapName)
         {
-            if (string.IsNullOrEmpty(mapName) || _textLoadedForMap == mapName)
+            if (_unloaded || string.IsNullOrEmpty(mapName) || _textLoadedForMap == mapName)
                 return;
 
             if (TryGetSharedApi() is null)
@@ -562,12 +574,12 @@ namespace WorldText
                 try
                 {
                     await EnsureTablesAsync().ConfigureAwait(false);
-                    Server.NextWorldUpdate(() => LoadWorldTextFromDb(generation));
+                    QueueTextUpdate(generation, () => LoadWorldTextFromDb(generation));
                 }
                 catch (Exception ex)
                 {
                     Logger.LogError(ex, "Error loading WorldText info from database. Please check your credentials.");
-                    Server.NextWorldUpdate(() => LoadWorldTextFromJson(generation));
+                    QueueTextUpdate(generation, () => LoadWorldTextFromJson(generation));
                 }
             });
         }
@@ -575,6 +587,8 @@ namespace WorldText
         // Remove all current text and reload it
         private void RefreshText()
         {
+            if (_unloaded) return;
+
             try
             {
                 var api = TryGetSharedApi();

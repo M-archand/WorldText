@@ -205,6 +205,7 @@ namespace WorldText
                 var newRot = new QAngle(slot.Rot.X + dAng.X, slot.Rot.Y + dAng.Y, slot.Rot.Z + dAng.Z);
 
                 var playerSlot = p.Slot;
+                int generation = _loadGeneration;
 
                 _ = Task.Run(async () =>
                 {
@@ -225,7 +226,7 @@ namespace WorldText
                     }
 
                     // Move only after the UPDATE has completed
-                    Server.NextWorldUpdate(() =>
+                    QueueTextUpdate(generation, () =>
                     {
                         if (!TryMoveTrackedText(slot.Id, newPos, newRot))
                             RefreshText();
