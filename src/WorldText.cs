@@ -30,6 +30,7 @@ namespace WorldText
         private string? _textLoadedForMap;
         private int _loadGeneration;
         private bool _unloaded;
+        private readonly SemaphoreSlim _jsonFileLock = new(1, 1);
         private static readonly string chatPrefix = $" {ChatColors.Purple}[{ChatColors.LightPurple}World-Text{ChatColors.Purple}]";
         private readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions
         {
@@ -109,12 +110,20 @@ namespace WorldText
             }
         }
 
+        private string MapJsonPath(string mapName) =>
+            Path.Combine(ModuleDirectory, "maps", $"{mapName}.json");
+
+        private List<WorldTextData>? ReadMapJson(string path) =>
+            File.Exists(path)
+                ? JsonSerializer.Deserialize<List<WorldTextData>>(File.ReadAllText(path))
+                : null;
+
+        private void WriteMapJson(string path, List<WorldTextData> data) =>
+            File.WriteAllText(path, JsonSerializer.Serialize(data, jsonOptions));
+
         private void SaveWorldTextToFile(Vector location, QAngle rotation, int groupNumber)
         {
-            var mapName = Server.MapName;
-            var mapsDirectory = Path.Combine(ModuleDirectory, "maps");
-            var path = Path.Combine(mapsDirectory, $"{mapName}.json");
-
+            var path = MapJsonPath(Server.MapName);
             var worldTextData = new WorldTextData
             {
                 GroupNumber = groupNumber,
@@ -122,19 +131,24 @@ namespace WorldText
                 Rotation = PlacementFormat.Format(rotation)
             };
 
-            List<WorldTextData> data;
-            if (File.Exists(path))
+            _ = Task.Run(async () =>
             {
-                data = JsonSerializer.Deserialize<List<WorldTextData>>(File.ReadAllText(path)) ?? new List<WorldTextData>();
-            }
-            else
-            {
-                data = new List<WorldTextData>();
-            }
-
-            data.Add(worldTextData);
-
-            File.WriteAllText(path, JsonSerializer.Serialize(data, jsonOptions));
+                await _jsonFileLock.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    var data = ReadMapJson(path) ?? new List<WorldTextData>();
+                    data.Add(worldTextData);
+                    WriteMapJson(path, data);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to save the placement to {Path}.", path);
+                }
+                finally
+                {
+                    _jsonFileLock.Release();
+                }
+            });
         }
 
         private async Task SaveWorldTextToDb(string mapName, int group, Vector location, QAngle rotation)
@@ -274,32 +288,44 @@ namespace WorldText
             }
 
             var mapName = Server.MapName;
-            var mapsDirectory = Path.Combine(ModuleDirectory, "maps");
-            var path = Path.Combine(mapsDirectory, $"{mapName}.json");
+            var path = MapJsonPath(mapName);
 
-            if (File.Exists(path))
+            Vector entityVector = target.Entity.AbsOrigin;
+            QAngle entityAngle = target.Entity.AbsRotation;
+            float targetX = entityVector.X, targetY = entityVector.Y;
+            float targetPitch = entityAngle.X, targetYaw = entityAngle.Y, targetRoll = entityAngle.Z;
+
+            _ = Task.Run(async () =>
             {
-                var data = JsonSerializer.Deserialize<List<WorldTextData>>(File.ReadAllText(path));
-                if (data != null)
+                await _jsonFileLock.WaitAsync().ConfigureAwait(false);
+                try
                 {
-                    Vector entityVector = target.Entity.AbsOrigin;
-                    QAngle entityAngle = target.Entity.AbsRotation;
+                    var data = ReadMapJson(path);
+                    if (data == null) return;
+
                     data.RemoveAll(x =>
                     {
-                        if (!PlacementFormat.TryParseVector(x.Location, out var location)) return false;
-                        if (!PlacementFormat.TryParseQAngle(x.Rotation, out var rotation)) return false;
+                        if (!PlacementFormat.TryParse(x.Location, out var lx, out var ly, out _)) return false;
+                        if (!PlacementFormat.TryParse(x.Rotation, out var pitch, out var yaw, out var roll)) return false;
 
-                        return location.X == entityVector.X &&
-                            location.Y == entityVector.Y &&
-                            rotation.X == entityAngle.X &&
-                            rotation.Y == entityAngle.Y &&
-                            rotation.Z == entityAngle.Z;
+                        return lx == targetX &&
+                            ly == targetY &&
+                            pitch == targetPitch &&
+                            yaw == targetYaw &&
+                            roll == targetRoll;
                     });
 
-                    string jsonString = JsonSerializer.Serialize(data, jsonOptions);
-                    File.WriteAllText(path, jsonString);
+                    WriteMapJson(path, data);
                 }
-            }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to remove the placement from {Path}.", path);
+                }
+                finally
+                {
+                    _jsonFileLock.Release();
+                }
+            });
 
             player.PrintToChat($"{chatPrefix} {ChatColors.Lime}Removed one placement from {ChatColors.White}Group {groupWithTarget} {ChatColors.Lime}on {ChatColors.White}{mapName}");
         }
@@ -308,38 +334,58 @@ namespace WorldText
         {
             if (!IsCurrentGeneration(generation)) return;
 
-            var mapName = passedMapName ?? Server.MapName;
-            var mapsDirectory = Path.Combine(ModuleDirectory, "maps");
-            var path = Path.Combine(mapsDirectory, $"{mapName}.json");
+            var path = MapJsonPath(passedMapName ?? Server.MapName);
 
-            if (File.Exists(path))
+            _ = Task.Run(async () =>
             {
-                var data = JsonSerializer.Deserialize<List<WorldTextData>>(File.ReadAllText(path));
-                if (data == null) return;
+                List<WorldTextData>? data = null;
 
-                Task.Run(() =>
+                await _jsonFileLock.WaitAsync().ConfigureAwait(false);
+                try
                 {
-                    foreach (var worldTextData in data)
+                    data = ReadMapJson(path);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to read the placements in {Path}.", path);
+                }
+                finally
+                {
+                    _jsonFileLock.Release();
+                }
+
+                if (data == null || data.Count == 0) return;
+
+                QueueTextUpdate(generation, () =>
+                {
+                    try
                     {
-                        var linesList = GetTextLines(worldTextData.GroupNumber);
+                        var checkAPI = TryGetSharedApi();
+                        if (checkAPI is null) return;
 
-                        QueueTextUpdate(generation, () =>
+                        foreach (var worldTextData in data)
                         {
-                            var checkAPI = TryGetSharedApi();
-                            if (checkAPI != null && !string.IsNullOrEmpty(worldTextData.Location) && !string.IsNullOrEmpty(worldTextData.Rotation))
+                            if (!PlacementFormat.TryParseVector(worldTextData.Location, out var location) ||
+                                !PlacementFormat.TryParseQAngle(worldTextData.Rotation, out var rotation))
                             {
-                                var messageID = checkAPI.AddWorldText(TextPlacement.Wall, linesList, PlacementFormat.ParseVector(worldTextData.Location), PlacementFormat.ParseQAngle(worldTextData.Rotation));
-                                if (!_currentTextByGroup.ContainsKey(worldTextData.GroupNumber))
-                                {
-                                    _currentTextByGroup[worldTextData.GroupNumber] = new List<int>();
-                                }
-                                _currentTextByGroup[worldTextData.GroupNumber].Add(messageID);
-
+                                Logger.LogWarning("Skipping malformed placement in {Path}: '{Location}' / '{Rotation}'.", path, worldTextData.Location, worldTextData.Rotation);
+                                continue;
                             }
-                        });
+
+                            var linesList = GetTextLines(worldTextData.GroupNumber);
+
+                            var messageID = checkAPI.AddWorldText(TextPlacement.Wall, linesList, location, rotation);
+                            if (!_currentTextByGroup.ContainsKey(worldTextData.GroupNumber))
+                                _currentTextByGroup[worldTextData.GroupNumber] = new List<int>();
+                            _currentTextByGroup[worldTextData.GroupNumber].Add(messageID);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Error spawning JSON wall text in LoadWorldTextFromJson.");
                     }
                 });
-            }
+            });
         }
 
         private void LoadWorldTextFromDb(int generation)
