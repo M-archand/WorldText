@@ -3,7 +3,6 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
-using System.Globalization;
 using System.Text.Json;
 using System.Data;
 using Microsoft.Extensions.Logging;
@@ -82,19 +81,13 @@ namespace WorldText
             public string Angle { get; set; } = "";
         }
 
-        private static string VecToStringInvariant(Vector v) =>
-            $"{v.X.ToString("0.###", CultureInfo.InvariantCulture)} {v.Y.ToString("0.###", CultureInfo.InvariantCulture)} {v.Z.ToString("0.###", CultureInfo.InvariantCulture)}";
-
-        private static string AngToStringInvariant(QAngle a) =>
-            $"{a.X.ToString("0.###", CultureInfo.InvariantCulture)} {a.Y.ToString("0.###", CultureInfo.InvariantCulture)} {a.Z.ToString("0.###", CultureInfo.InvariantCulture)}";
-
         private async Task DeleteWorldTextFromDb(string mapName, int group, Vector location, QAngle rotation)
         {
             string table = $"{Config.DatabaseSettings.TableName}";
             using var conn = CreateDbConnection();
 
-            var loc = VecToStringInvariant(location);
-            var ang = AngToStringInvariant(rotation);
+            var loc = PlacementFormat.Format(location);
+            var ang = PlacementFormat.Format(rotation);
 
             string sql = $@"
                 DELETE FROM `{table}`
@@ -185,19 +178,11 @@ namespace WorldText
                         {
                             if (entry.GroupNumber <= 0) continue;
 
-                            var locParts = entry.Location.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                            var angParts = entry.Rotation.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                            if (locParts.Length != 3 || angParts.Length != 3) throw new ArgumentException("Bad vector/angle parts");
+                            if (!PlacementFormat.TryParse(entry.Location, out var fx, out var fy, out var fz))
+                                throw new ArgumentException("Bad location");
 
-                            if (!TryParseFloatInv(locParts[0], out var fx) ||
-                                !TryParseFloatInv(locParts[1], out var fy) ||
-                                !TryParseFloatInv(locParts[2], out var fz))
-                                throw new ArgumentException("Bad vector floats");
-
-                            if (!TryParseFloatInv(angParts[0], out var fp) ||
-                                !TryParseFloatInv(angParts[1], out var fyaw) ||
-                                !TryParseFloatInv(angParts[2], out var fr))
-                                throw new ArgumentException("Bad angle floats");
+                            if (!PlacementFormat.TryParse(entry.Rotation, out var fp, out var fyaw, out var fr))
+                                throw new ArgumentException("Bad angle");
 
                             importQueue.Add(new ImportEntry
                             {
@@ -251,9 +236,6 @@ namespace WorldText
 
         private const int ImportBatchSize = 200;
 
-        private static string FloatToStringInvariant(float v) =>
-            v.ToString("0.###", CultureInfo.InvariantCulture);
-
         private async Task<int> SaveWorldTextBatchToDb(IReadOnlyList<ImportEntry> entries)
         {
             string table = $"{Config.DatabaseSettings.TableName}";
@@ -275,8 +257,8 @@ namespace WorldText
                     rows.Add($"(@m{i},@g{i},@loc{i},@ang{i})");
                     parameters.Add($"m{i}", e.MapName);
                     parameters.Add($"g{i}", e.GroupNumber);
-                    parameters.Add($"loc{i}", $"{FloatToStringInvariant(e.X)} {FloatToStringInvariant(e.Y)} {FloatToStringInvariant(e.Z)}");
-                    parameters.Add($"ang{i}", $"{FloatToStringInvariant(e.Pitch)} {FloatToStringInvariant(e.Yaw)} {FloatToStringInvariant(e.Roll)}");
+                    parameters.Add($"loc{i}", PlacementFormat.Format(e.X, e.Y, e.Z));
+                    parameters.Add($"ang{i}", PlacementFormat.Format(e.Pitch, e.Yaw, e.Roll));
                 }
 
                 string sql = $@"

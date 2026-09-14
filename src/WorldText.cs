@@ -9,7 +9,6 @@ using CounterStrikeSharp.API.Modules.Utils;
 using CS2MenuManager.API.Class;
 using K4WorldTextSharedAPI;
 using System.Drawing;
-using System.Globalization;
 using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Logging;
@@ -115,8 +114,8 @@ namespace WorldText
             var worldTextData = new WorldTextData
             {
                 GroupNumber = groupNumber,
-                Location = location.ToString(),
-                Rotation = rotation.ToString()
+                Location = PlacementFormat.Format(location),
+                Rotation = PlacementFormat.Format(rotation)
             };
 
             List<WorldTextData> data;
@@ -139,8 +138,8 @@ namespace WorldText
             string table = $"{Config.DatabaseSettings.TableName}";
             using var conn = CreateDbConnection();
 
-            var loc = VecToStringInvariant(location);
-            var ang = AngToStringInvariant(rotation);
+            var loc = PlacementFormat.Format(location);
+            var ang = PlacementFormat.Format(rotation);
 
             string sql = $@"
                     INSERT IGNORE INTO `{table}` (`MapName`,`GroupNumber`,`Location`,`Angle`)
@@ -279,12 +278,17 @@ namespace WorldText
                 if (data != null)
                 {
                     Vector entityVector = target.Entity.AbsOrigin;
+                    QAngle entityAngle = target.Entity.AbsRotation;
                     data.RemoveAll(x =>
                     {
-                        Vector location = ParseVector(x.Location);
+                        if (!PlacementFormat.TryParseVector(x.Location, out var location)) return false;
+                        if (!PlacementFormat.TryParseQAngle(x.Rotation, out var rotation)) return false;
+
                         return location.X == entityVector.X &&
                             location.Y == entityVector.Y &&
-                            x.Rotation == target.Entity.AbsRotation.ToString();
+                            rotation.X == entityAngle.X &&
+                            rotation.Y == entityAngle.Y &&
+                            rotation.Z == entityAngle.Z;
                     });
 
                     string jsonString = JsonSerializer.Serialize(data, jsonOptions);
@@ -321,7 +325,7 @@ namespace WorldText
                             var checkAPI = TryGetSharedApi();
                             if (checkAPI != null && !string.IsNullOrEmpty(worldTextData.Location) && !string.IsNullOrEmpty(worldTextData.Rotation))
                             {
-                                var messageID = checkAPI.AddWorldText(TextPlacement.Wall, linesList, ParseVector(worldTextData.Location), ParseQAngle(worldTextData.Rotation));
+                                var messageID = checkAPI.AddWorldText(TextPlacement.Wall, linesList, PlacementFormat.ParseVector(worldTextData.Location), PlacementFormat.ParseQAngle(worldTextData.Rotation));
                                 if (!_currentTextByGroup.ContainsKey(worldTextData.GroupNumber))
                                 {
                                     _currentTextByGroup[worldTextData.GroupNumber] = new List<int>();
@@ -365,8 +369,8 @@ namespace WorldText
                             {
                                 var linesList = GetTextLines(rec.GroupNumber);
 
-                                var loc = ParseVector(rec.Location);
-                                var rot = ParseQAngle(rec.Angle);
+                                var loc = PlacementFormat.ParseVector(rec.Location);
+                                var rot = PlacementFormat.ParseQAngle(rec.Angle);
 
                                 var id = api.AddWorldText(TextPlacement.Wall, linesList, loc, rot);
                                 if (!_currentTextByGroup.ContainsKey(rec.GroupNumber))
@@ -589,38 +593,12 @@ namespace WorldText
             EnsureTextLoaded(Server.MapName);
         }
 
-        private static bool TryParseFloatInv(string s, out float f) =>
-            float.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands,
-                        CultureInfo.InvariantCulture, out f);
-
         private float DistanceTo(Vector a, Vector b)
         {
             float dx = a.X - b.X;
             float dy = a.Y - b.Y;
             float dz = a.Z - b.Z;
             return (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
-        }
-
-        private Vector ParseVector(string s)
-        {
-            var parts = s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length < 3 ||
-                !TryParseFloatInv(parts[0], out var x) ||
-                !TryParseFloatInv(parts[1], out var y) ||
-                !TryParseFloatInv(parts[2], out var z))
-                throw new ArgumentException("Invalid vector string format.");
-            return new Vector(x, y, z);
-        }
-
-        private QAngle ParseQAngle(string s)
-        {
-            var parts = s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length < 3 ||
-                !TryParseFloatInv(parts[0], out var p) ||
-                !TryParseFloatInv(parts[1], out var y) ||
-                !TryParseFloatInv(parts[2], out var r))
-                throw new ArgumentException("Invalid angle string format.");
-            return new QAngle(p, y, r);
         }
 
         private PointWorldTextJustifyHorizontal_t GetTextAlignment(string? align)

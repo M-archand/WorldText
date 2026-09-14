@@ -108,8 +108,8 @@ namespace WorldText
                     var slots = new List<DbPlacement>(raw.Count);
                     foreach (var r in raw)
                     {
-                        if (!TryParseVector(r.Loc, out var pos)) continue;
-                        if (!TryParseAngles(r.Ang, out var rot)) continue;
+                        if (!PlacementFormat.TryParseVector(r.Loc, out var pos)) continue;
+                        if (!PlacementFormat.TryParseQAngle(r.Ang, out var rot)) continue;
 
                         slots.Add(new DbPlacement
                         {
@@ -266,52 +266,12 @@ namespace WorldText
             string table = $"{Config.DatabaseSettings.TableName}";
             using var conn = CreateDbConnection();
 
-            var loc = VecToStringInvariant(location);
-            var ang = AngToStringInvariant(rotation);
+            var loc = PlacementFormat.Format(location);
+            var ang = PlacementFormat.Format(rotation);
 
             await conn.ExecuteAsync(
                 $@"UPDATE `{table}` SET `Location`=@loc, `Angle`=@ang WHERE `Id`=@id;",
                 new { id, loc, ang });
-        }
-
-        private static bool TryParseVector(string input, out Vector result)
-        {
-            result = new Vector(0, 0, 0);
-            if (string.IsNullOrWhiteSpace(input)) return false;
-
-            var parts = input.Trim()
-                            .Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 3) return false;
-
-            if (float.TryParse(parts[0], NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var x) &&
-                float.TryParse(parts[1], NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var y) &&
-                float.TryParse(parts[2], NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var z))
-            {
-                result = new Vector(x, y, z);
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool TryParseAngles(string input, out QAngle result)
-        {
-            result = new QAngle(0, 0, 0);
-            if (string.IsNullOrWhiteSpace(input)) return false;
-
-            var parts = input.Trim()
-                            .Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 3) return false;
-
-            if (float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var pitch) &&
-                float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var yaw) &&
-                float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var roll))
-            {
-                result = new QAngle(pitch, yaw, roll);
-                return true;
-            }
-
-            return false;
         }
     }
 }
