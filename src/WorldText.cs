@@ -19,7 +19,7 @@ namespace WorldText
     {
         public override string ModuleName => "World Text";
         public override string ModuleAuthor => "Marchand";
-        public override string ModuleVersion => "1.0.3";
+        public override string ModuleVersion => "2.0.0";
         public required PluginConfig Config { get; set; } = new PluginConfig();
         public static PluginCapability<IK4WorldTextProvider> Capability_SharedAPI { get; } = new("k4-worldtext:sharedapi");
         private bool _hasMenuManager;

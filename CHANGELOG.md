@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.0.0](https://github.com/M-archand/WallText/compare/v1.0.3...v2.0.0) (2026-09-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* [K4-WorldText-API](https://github.com/M-archand/K4-WorldText-API) 2.0.0 or newer is now required, and the two plugins must be updated together. The `k4-worldtext:sharedapi` capability serves `IK4WorldTextProvider` from 2.0.0 onwards, so a server that updates only one of the two resolves nothing: every command replies `K4-WorldText-API missing.`, and no text is placed or restored. Nothing crashes and no placement is lost, so finishing the upgrade restores the text.
+
+
+### Features
+
+* **shared api:** take the per-plugin scope through `IK4WorldTextProvider.ForPlugin(this)`, so every text this plugin places belongs to it and cannot be touched by another consumer of the API ([9937fde](https://github.com/M-archand/WallText/commit/9937fde9d64be0489a7534cef60dbd202deae83b))
+* **shared api:** despawn this plugin's text through the scoped `RemoveAll()` on unload and on `!reloadtext`, instead of removing each tracked id in turn. Text placed by other plugins is left alone ([9937fde](https://github.com/M-archand/WallText/commit/9937fde9d64be0489a7534cef60dbd202deae83b))
+
+
+### Bug Fixes
+
+* **spawning:** skip a placement whose config group has no usable lines instead of passing an empty list to the API. 2.0.0 rejects an empty list, and the throw previously abandoned every remaining placement on the map ([9937fde](https://github.com/M-archand/WallText/commit/9937fde9d64be0489a7534cef60dbd202deae83b))
+* **commands:** reply in chat when `!text` is used with a group that has no usable lines, or by a player with no valid pawn, instead of only logging the failure ([9937fde](https://github.com/M-archand/WallText/commit/9937fde9d64be0489a7534cef60dbd202deae83b))
+* **shared api:** treat an unknown id as gone by catching `KeyNotFoundException` specifically, and prune dead ids from the `null` that `GetWorldTextLineEntities` now returns, so a genuine fault is no longer swallowed as a stale id ([9937fde](https://github.com/M-archand/WallText/commit/9937fde9d64be0489a7534cef60dbd202deae83b))
+
+
+### Miscellaneous
+
+* **deps:** update the vendored `K4-WorldText-SharedAPI.dll` to 2.0.0 ([9937fde](https://github.com/M-archand/WallText/commit/9937fde9d64be0489a7534cef60dbd202deae83b))
+* **docs:** state the K4-WorldText-API 2.0.0 requirement in the README dependency list ([9937fde](https://github.com/M-archand/WallText/commit/9937fde9d64be0489a7534cef60dbd202deae83b))
+
+
 ## [1.0.3](https://github.com/M-archand/WallText/compare/1.0.2...v1.0.3) (2026-09-13)
 
 
