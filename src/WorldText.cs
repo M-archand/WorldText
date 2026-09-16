@@ -21,7 +21,7 @@ namespace WorldText
         public override string ModuleAuthor => "Marchand";
         public override string ModuleVersion => "1.0.3";
         public required PluginConfig Config { get; set; } = new PluginConfig();
-        public static PluginCapability<IK4WorldTextSharedAPI> Capability_SharedAPI { get; } = new("k4-worldtext:sharedapi");
+        public static PluginCapability<IK4WorldTextProvider> Capability_SharedAPI { get; } = new("k4-worldtext:sharedapi");
         private bool _hasMenuManager;
         private readonly Dictionary<int, List<int>> _currentTextByGroup = new();
         private readonly Dictionary<ulong, int> _k4IdByDbId = new();
@@ -92,13 +92,7 @@ namespace WorldText
 
             try
             {
-                var checkAPI = TryGetSharedApi();
-                if (checkAPI != null)
-                {
-                    foreach (var groupTextList in _currentTextByGroup.Values)
-                        foreach (var id in groupTextList)
-                            RemoveTrackedText(checkAPI, id);
-                }
+                TryGetSharedApi()?.RemoveAll();
             }
             finally
             {
@@ -363,6 +357,8 @@ namespace WorldText
                             }
 
                             var linesList = GetTextLines(worldTextData.GroupNumber);
+                            if (linesList.Count == 0)
+                                continue;
 
                             var messageID = checkAPI.AddWorldText(TextPlacement.Wall, linesList, location, rotation);
                             if (!_currentTextByGroup.ContainsKey(worldTextData.GroupNumber))
@@ -405,6 +401,8 @@ namespace WorldText
                             foreach (var rec in rows)
                             {
                                 var linesList = GetTextLines(rec.GroupNumber);
+                                if (linesList.Count == 0)
+                                    continue;
 
                                 var loc = PlacementFormat.ParseVector(rec.Location);
                                 var rot = PlacementFormat.ParseQAngle(rec.Angle);
@@ -491,11 +489,11 @@ namespace WorldText
             return linesList;
         }
 
-        private static IK4WorldTextSharedAPI? TryGetSharedApi()
+        private IK4WorldTextSharedAPI? TryGetSharedApi()
         {
             try
             {
-                return Capability_SharedAPI.Get();
+                return Capability_SharedAPI.Get()?.ForPlugin(this);
             }
             catch (KeyNotFoundException)
             {
@@ -539,9 +537,9 @@ namespace WorldText
         {
             try
             {
-                api.RemoveWorldText(id, false);
+                api.RemoveWorldText(id);
             }
-            catch (Exception ex)
+            catch (KeyNotFoundException ex)
             {
                 Logger.LogDebug(ex, "WorldText id {Id} was already removed from K4-WorldText-API.", id);
             }
@@ -565,10 +563,10 @@ namespace WorldText
 
             try
             {
-                api.TeleportWorldText(k4Id, location, rotation, modifyConfig: false);
+                api.TeleportWorldText(k4Id, location, rotation);
                 return true;
             }
-            catch (Exception ex)
+            catch (KeyNotFoundException ex)
             {
                 Logger.LogWarning(ex, "TeleportWorldText failed for id {Id}; falling back to a full refresh.", k4Id);
                 _k4IdByDbId.Remove(dbId);
@@ -576,24 +574,11 @@ namespace WorldText
             }
         }
 
-        // Drop tracked ids that K4 no longer knows so nearest text searches cannot throw
+        // Drop tracked ids that K4 no longer knows
         private void PruneDeadTextIds(IK4WorldTextSharedAPI api)
         {
             foreach (var ids in _currentTextByGroup.Values)
-            {
-                ids.RemoveAll(id =>
-                {
-                    try
-                    {
-                        api.GetWorldTextLineEntities(id);
-                        return false;
-                    }
-                    catch (Exception)
-                    {
-                        return true;
-                    }
-                });
-            }
+                ids.RemoveAll(id => api.GetWorldTextLineEntities(id) is null);
         }
 
         private void EnsureTextLoaded(string mapName)
@@ -638,13 +623,7 @@ namespace WorldText
 
             try
             {
-                var api = TryGetSharedApi();
-                if (api != null)
-                {
-                    foreach (var kvp in _currentTextByGroup)
-                        foreach (var id in kvp.Value)
-                            RemoveTrackedText(api, id);
-                }
+                TryGetSharedApi()?.RemoveAll();
             }
             finally
             {

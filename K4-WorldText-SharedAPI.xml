@@ -1,0 +1,260 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>K4-WorldText-SharedAPI</name>
+    </assembly>
+    <members>
+        <member name="T:K4WorldTextSharedAPI.TextPlacement">
+            <summary>Where a text is oriented in the world.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextPlacement.Wall">
+            <summary>Text stands upright on a vertical surface.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextPlacement.Floor">
+            <summary>Text lies flat on a horizontal surface.</summary>
+        </member>
+        <member name="T:K4WorldTextSharedAPI.TextLine">
+            <summary>
+            One line of world text with its own styling and optional background panel. Numeric fields are clamped to the
+            documented ranges before they reach the entity, never rejected; <c>NaN</c> becomes the in-range value closest to zero.
+            The plugin reads a <see cref="T:K4WorldTextSharedAPI.TextLine"/> only when it is passed to an API call, so mutating one afterwards has no
+            effect until <see cref="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.UpdateWorldText(System.Int32,K4WorldTextSharedAPI.TextLine)"/> is called.
+            </summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.Color">
+            <summary>Text color.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.FontSize">
+            <summary>Font size in points. Clamped to 1–500.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.FontName">
+            <summary>
+            Font family name. Truncated to 64 UTF-8 bytes, the size of the entity's font-name field. Rendering happens on
+            each client, and the client resolves the name through the game's own fontconfig setup, so an unknown name falls
+            back to a default sans-serif face instead of failing.
+            <para>
+            Faces shipped with CS2 (<c>game/csgo/panorama/fonts/</c>). Stratum2 faces are named exactly as in the game's
+            panorama <c>fonts.css</c>:
+            <list type="bullet">
+            <item><description><c>Stratum2</c>, <c>Stratum2 Thin</c>, <c>Stratum2 Light</c>, <c>Stratum2 Medium</c>, <c>Stratum2 Black</c></description></item>
+            <item><description><c>Stratum2 Thin Italic</c>, <c>Stratum2 Light Italic</c>, <c>Stratum2 Medium Italic</c>, <c>Stratum2 Black Italic</c></description></item>
+            <item><description><c>Stratum2 Condensed</c>, <c>Stratum2 Thin Condensed</c>, <c>Stratum2 Light Condensed</c>, <c>Stratum2 Medium Condensed</c>, <c>Stratum2 Bold Condensed</c>, <c>Stratum2 Black Condensed</c></description></item>
+            <item><description><c>Stratum2 TF</c>, <c>Stratum2 Thin TF</c>, <c>Stratum2 Light TF</c>, <c>Stratum2 Medium TF</c>, <c>Stratum2 Bold TF</c>, <c>Stratum2 Black TF</c> (tabular figures)</description></item>
+            <item><description><c>Stratum2 Mono</c>, <c>Stratum2 Mono Light</c>, <c>Stratum2 Regular Monodigit</c>, <c>Stratum2 Bold Monodigit</c></description></item>
+            <item><description><c>Noto Sans</c>, <c>Noto Sans Bold</c>, <c>Noto Sans Italic</c>, <c>Noto Sans Bold Italic</c></description></item>
+            <item><description><c>Noto Serif</c>, <c>Noto Serif Bold</c>, <c>Noto Serif Italic</c>, <c>Noto Serif Bold Italic</c></description></item>
+            <item><description><c>Noto Mono</c>, <c>Noto Sans Symbols</c></description></item>
+            <item><description><c>Noto Sans JP</c>, <c>Noto Sans KR</c>, <c>Noto Sans SC</c>, <c>Noto Sans TC</c>, <c>Noto Sans Thai</c>, each also as <c>... Light</c> and <c>... Bold</c></description></item>
+            </list>
+            The game's own CSS selects regular Stratum2 bold and italic through font weight and style, which
+            <c>point_worldtext</c> has no field for, so use one of the named faces above for those.
+            </para>
+            <para>
+            <c>Arial</c>, <c>Arial Bold</c>, <c>Tahoma</c>, <c>Verdana</c>, and <c>Courier New</c> are not shipped: the game
+            loads them from the client's OS font directory, so they render only on clients that have them installed
+            (Windows by default; Linux and macOS clients get a fontconfig substitute).
+            </para>
+            </summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.FullBright">
+            <summary>Render the text unlit, ignoring map lighting.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.JustifyHorizontal">
+            <summary>Horizontal alignment of the text relative to its origin.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.JustifyVertical">
+            <summary>Vertical alignment of the text relative to its origin.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.ReorientMode">
+            <summary>Whether the text turns to face the viewer.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.Scale">
+            <summary>World units per pixel. Clamped to 0.01–10.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.Text">
+            <summary>Line text. Text longer than 512 UTF-8 bytes is truncated on a character boundary before it reaches the entity.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundEnabled">
+            <summary>Enable the extra background entity behind this line.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundColor">
+            <summary>Color for the background entity.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundFullBright">
+            <summary>Whether the background entity is fullbright.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundScale">
+            <summary>Background scale (world units per pixel). Usually match foreground. Clamped to 0.01–10.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundWorldToUV">
+            <summary>Background rectangle UV scale (higher = denser texture; vanilla uses ~0.05). Clamped to 0.001–10.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundBorderWidth">
+            <summary>Width padding around the text background (world units). Clamped to 0–1000.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundBorderHeight">
+            <summary>Height padding around the text background (world units). Clamped to 0–1000.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.ForegroundDepthOffset">
+            <summary>Depth offset for the foreground (0 keeps existing behavior). Clamped to ±100.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundDepthOffset">
+            <summary>Depth offset for the background (negative puts it "behind"). Clamped to ±100.</summary>
+        </member>
+        <member name="F:K4WorldTextSharedAPI.TextLine.BackgroundHideText">
+            <summary>Hide background text</summary>
+        </member>
+        <member name="P:K4WorldTextSharedAPI.TextLine.BackgroundAsSingleBlock">
+            <summary>Background as single entity</summary>
+        </member>
+        <member name="P:K4WorldTextSharedAPI.TextLine.BackgroundMaxCharsPerLine">
+            <summary>Limit characters per line (point_worldtext has a limit of 512 total). Clamped to 1–256.</summary>
+        </member>
+        <member name="P:K4WorldTextSharedAPI.TextLine.BackgroundWidthInflation">
+            <summary>How much wider than the raw character count to make the mask (compensates for proportional fonts; 1.35–1.60 typical). Clamped to 0.1–10.</summary>
+        </member>
+        <member name="P:K4WorldTextSharedAPI.TextLine.BackgroundPadChars">
+            <summary>Extra invisible "character" padding on each side of the mask. Clamped to 0–256.</summary>
+        </member>
+        <member name="T:K4WorldTextSharedAPI.IK4WorldTextProvider">
+            <summary>
+            Entry point served by the <c>k4-worldtext:sharedapi</c> plugin capability.
+            Obtain it with <c>new PluginCapability&lt;IK4WorldTextProvider&gt;("k4-worldtext:sharedapi").Get()</c>.
+            </summary>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextProvider.ForPlugin(CounterStrikeSharp.API.Core.IPlugin)">
+            <summary>
+            Returns the text API scoped to <paramref name="owner"/>. Every text created through the returned instance
+            belongs to that plugin: its id is unknown to every other scope, and <see cref="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.RemoveAll"/>
+            on it removes only those texts. Scopes are keyed by <see cref="P:CounterStrikeSharp.API.Core.IPlugin.ModuleName"/>, so repeated calls from the
+            same plugin return the same scope, also after that plugin hot reloads. Safe to call from any thread.
+            </summary>
+            <exception cref="T:System.ArgumentNullException"><paramref name="owner"/> is null.</exception>
+            <exception cref="T:System.ArgumentException"><paramref name="owner"/> has an empty <see cref="P:CounterStrikeSharp.API.Core.IPlugin.ModuleName"/>.</exception>
+        </member>
+        <member name="T:K4WorldTextSharedAPI.IK4WorldTextSharedAPI">
+            <summary>
+            Text API bound to one owning plugin; obtain it from <see cref="M:K4WorldTextSharedAPI.IK4WorldTextProvider.ForPlugin(CounterStrikeSharp.API.Core.IPlugin)"/>.
+            An id is only valid on the scope that issued it. Every id-taking method treats an id issued to another plugin
+            exactly like an unknown id.
+            <para>
+            Every method except <see cref="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.GetWorldTextLineEntities(System.Int32)"/> is safe to call from any thread. Arguments are validated
+            synchronously on the calling thread. From the game thread the entity work runs before the call returns; from any
+            other thread it is queued with <c>Server.NextWorldUpdate</c> and runs in call order, and the returned id is valid
+            right away. Failures inside the entity work never reach the caller: the plugin rolls back, logs, keeps the id
+            tracked, and retries the spawn on the next round start.
+            </para>
+            <para>
+            Every id becomes invalid on map end and when this plugin unloads or reloads. Re-create texts from your own
+            map-start handling.
+            </para>
+            </summary>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.AddWorldText(K4WorldTextSharedAPI.TextPlacement,K4WorldTextSharedAPI.TextLine,CounterStrikeSharp.API.Modules.Utils.Vector,CounterStrikeSharp.API.Modules.Utils.QAngle)">
+            <summary>Spawns a single-line text at a world position and angle.</summary>
+            <param name="placement">Wall or floor orientation.</param>
+            <param name="textLine">Content and styling of the line. Copied at the call.</param>
+            <param name="position">World position. Copied at the call, so an entity-backed <see cref="T:CounterStrikeSharp.API.Modules.Utils.Vector"/> is safe.</param>
+            <param name="angle">World angle. Copied at the call, so an entity-backed <see cref="T:CounterStrikeSharp.API.Modules.Utils.QAngle"/> is safe.</param>
+            <returns>The id of the new text, valid on this scope only.</returns>
+            <exception cref="T:System.ArgumentException">
+            <paramref name="textLine"/>, <paramref name="position"/>, or <paramref name="angle"/> is null,
+            <paramref name="textLine"/> has a null <see cref="F:K4WorldTextSharedAPI.TextLine.Text"/>, or <paramref name="placement"/> is outside
+            the <see cref="T:K4WorldTextSharedAPI.TextPlacement"/> enum.
+            </exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.AddWorldText(K4WorldTextSharedAPI.TextPlacement,System.Collections.Generic.List{K4WorldTextSharedAPI.TextLine},CounterStrikeSharp.API.Modules.Utils.Vector,CounterStrikeSharp.API.Modules.Utils.QAngle)">
+            <summary>Spawns a multi-line text at a world position and angle. Lines are stacked top to bottom in list order.</summary>
+            <param name="placement">Wall or floor orientation.</param>
+            <param name="textLines">Content and styling of each line. The list is copied at the call, so the caller may reuse or clear it afterwards.</param>
+            <param name="position">World position. Copied at the call, so an entity-backed <see cref="T:CounterStrikeSharp.API.Modules.Utils.Vector"/> is safe.</param>
+            <param name="angle">World angle. Copied at the call, so an entity-backed <see cref="T:CounterStrikeSharp.API.Modules.Utils.QAngle"/> is safe.</param>
+            <returns>The id of the new text, valid on this scope only.</returns>
+            <exception cref="T:System.ArgumentException">
+            <paramref name="textLines"/>, <paramref name="position"/>, or <paramref name="angle"/> is null,
+            <paramref name="textLines"/> is empty or contains a null entry or a null <see cref="F:K4WorldTextSharedAPI.TextLine.Text"/>, or
+            <paramref name="placement"/> is outside the <see cref="T:K4WorldTextSharedAPI.TextPlacement"/> enum.
+            </exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.AddWorldTextAtPlayer(CounterStrikeSharp.API.Core.CCSPlayerController,K4WorldTextSharedAPI.TextPlacement,K4WorldTextSharedAPI.TextLine)">
+            <summary>
+            Spawns a single-line text relative to a player: at their feet for <see cref="F:K4WorldTextSharedAPI.TextPlacement.Floor"/>, at their
+            position for <see cref="F:K4WorldTextSharedAPI.TextPlacement.Wall"/>, offset 15 units in the direction they face. The player's
+            position is read when the entity work runs. From a non-game thread the player is re-validated at world-update
+            time; if they disconnected in between, no text is created, the id becomes unknown, and a warning is logged.
+            </summary>
+            <param name="player">Player to place the text at.</param>
+            <param name="placement">Wall or floor orientation.</param>
+            <param name="textLine">Content and styling of the line. Copied at the call.</param>
+            <returns>The id of the new text, valid on this scope only.</returns>
+            <exception cref="T:System.ArgumentException">
+            <paramref name="player"/> or <paramref name="textLine"/> is null, <paramref name="player"/> is invalid or has no
+            valid pawn, <paramref name="textLine"/> has a null <see cref="F:K4WorldTextSharedAPI.TextLine.Text"/>, or <paramref name="placement"/>
+            is outside the <see cref="T:K4WorldTextSharedAPI.TextPlacement"/> enum.
+            </exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.AddWorldTextAtPlayer(CounterStrikeSharp.API.Core.CCSPlayerController,K4WorldTextSharedAPI.TextPlacement,System.Collections.Generic.List{K4WorldTextSharedAPI.TextLine})">
+            <summary>
+            Spawns a multi-line text relative to a player: at their feet for <see cref="F:K4WorldTextSharedAPI.TextPlacement.Floor"/>, at their
+            position for <see cref="F:K4WorldTextSharedAPI.TextPlacement.Wall"/>, offset 15 units in the direction they face. The player's
+            position is read when the entity work runs. From a non-game thread the player is re-validated at world-update
+            time; if they disconnected in between, no text is created, the id becomes unknown, and a warning is logged.
+            </summary>
+            <param name="player">Player to place the text at.</param>
+            <param name="placement">Wall or floor orientation.</param>
+            <param name="textLines">Content and styling of each line. The list is copied at the call, so the caller may reuse or clear it afterwards.</param>
+            <returns>The id of the new text, valid on this scope only.</returns>
+            <exception cref="T:System.ArgumentException">
+            <paramref name="player"/> or <paramref name="textLines"/> is null, <paramref name="player"/> is invalid or has
+            no valid pawn, <paramref name="textLines"/> is empty or contains a null entry or a null
+            <see cref="F:K4WorldTextSharedAPI.TextLine.Text"/>, or <paramref name="placement"/> is outside the <see cref="T:K4WorldTextSharedAPI.TextPlacement"/> enum.
+            </exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.UpdateWorldText(System.Int32,K4WorldTextSharedAPI.TextLine)">
+            <summary>
+            Replaces the content and styling of an existing text with a single line. The entity is updated in place when
+            the line count, font sizes, and background layout are unchanged; otherwise the text is respawned.
+            </summary>
+            <param name="id">Id issued by this scope.</param>
+            <param name="textLine">New content and styling, or <c>null</c> to re-apply the current lines.</param>
+            <exception cref="T:System.Collections.Generic.KeyNotFoundException"><paramref name="id"/> is not tracked by this scope, including every id issued before the last map change.</exception>
+            <exception cref="T:System.ArgumentException"><paramref name="textLine"/> has a null <see cref="F:K4WorldTextSharedAPI.TextLine.Text"/>.</exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.UpdateWorldText(System.Int32,System.Collections.Generic.List{K4WorldTextSharedAPI.TextLine})">
+            <summary>
+            Replaces the content and styling of an existing text with a list of lines. Entities are updated in place when
+            the line count, font sizes, and background layout are unchanged; otherwise the text is respawned.
+            </summary>
+            <param name="id">Id issued by this scope.</param>
+            <param name="textLines">New content and styling for each line, or <c>null</c> to re-apply the current lines. The list is copied at the call.</param>
+            <exception cref="T:System.Collections.Generic.KeyNotFoundException"><paramref name="id"/> is not tracked by this scope, including every id issued before the last map change.</exception>
+            <exception cref="T:System.ArgumentException"><paramref name="textLines"/> is empty or contains a null entry or a null <see cref="F:K4WorldTextSharedAPI.TextLine.Text"/>.</exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.RemoveWorldText(System.Int32)">
+            <summary>Despawns a text and forgets its id.</summary>
+            <param name="id">Id issued by this scope.</param>
+            <exception cref="T:System.Collections.Generic.KeyNotFoundException"><paramref name="id"/> is not tracked by this scope, including every id issued before the last map change.</exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.GetWorldTextLineEntities(System.Int32)">
+            <summary>
+            Returns the valid foreground entity for each line of a text. Background entities and lines whose entity is
+            currently invalid are not included. A text whose spawn is still queued from another thread is listed with no
+            entities until the next world update. <b>Game thread only:</b> the entities cannot be marshalled.
+            </summary>
+            <param name="id">Id issued by this scope.</param>
+            <returns>The line entities, or <c>null</c> if <paramref name="id"/> is not tracked by this scope.</returns>
+            <exception cref="T:System.InvalidOperationException">Called from a thread other than the game thread.</exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.TeleportWorldText(System.Int32,CounterStrikeSharp.API.Modules.Utils.Vector,CounterStrikeSharp.API.Modules.Utils.QAngle)">
+            <summary>Moves an existing text in place. Entities are respawned only if one of them is no longer valid.</summary>
+            <param name="id">Id issued by this scope.</param>
+            <param name="position">New world position. Copied at the call.</param>
+            <param name="angle">New world angle. Copied at the call.</param>
+            <exception cref="T:System.Collections.Generic.KeyNotFoundException"><paramref name="id"/> is not tracked by this scope, including every id issued before the last map change.</exception>
+            <exception cref="T:System.ArgumentException"><paramref name="position"/> or <paramref name="angle"/> is null.</exception>
+        </member>
+        <member name="M:K4WorldTextSharedAPI.IK4WorldTextSharedAPI.RemoveAll">
+            <summary>Despawns every text created through this scope. Texts owned by other plugins are untouched.</summary>
+        </member>
+    </members>
+</doc>

@@ -72,6 +72,12 @@ namespace WorldText
             }
 
             var linesList = GetTextLines(groupNumber);
+            if (linesList.Count == 0)
+            {
+                command.ReplyToCommand($"{chatPrefix} {ChatColors.LightRed}Group {groupNumber} has no text lines to place.");
+                return;
+            }
+
             int generation = _loadGeneration;
             int playerSlot = player.Slot;
 
@@ -81,6 +87,12 @@ namespace WorldText
                 {
                     var owner = ValidPlayer(playerSlot);
                     if (owner is null) return;
+
+                    if (owner.PlayerPawn?.Value?.IsValid != true)
+                    {
+                        owner.PrintToChat($"{chatPrefix} {ChatColors.LightRed}You need to be spawned in to place text.");
+                        return;
+                    }
 
                     int messageID = api.AddWorldTextAtPlayer(owner, TextPlacement.Wall, linesList);
 
@@ -103,10 +115,10 @@ namespace WorldText
 
                                 try
                                 {
-                                    api.TeleportWorldText(messageID, lifted, rotation, modifyConfig: false);
+                                    api.TeleportWorldText(messageID, lifted, rotation);
                                     location = lifted;
                                 }
-                                catch (Exception te)
+                                catch (KeyNotFoundException te)
                                 {
                                     Logger.LogWarning(te, $"TeleportWorldText failed for group {groupNumber}; saving original location without ZOffset.");
                                 }

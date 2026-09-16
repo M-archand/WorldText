@@ -16,7 +16,7 @@
 To use this plugin, you'll need the following dependencies installed:
 
 - [**CounterStrikeSharp**](https://github.com/roflmuffin/CounterStrikeSharp): CounterStrikeSharp allows you to write server plugins in C# for Counter-Strike 2.
-- [**K4-WorldText-API**](https://github.com/M-archand/K4-WorldText-API): This is a shared developer API to handle world text. **Required** - without it every command will reply with `K4-WorldText-API missing.`
+- [**K4-WorldText-API**](https://github.com/M-archand/K4-WorldText-API): This is a shared developer API to handle world text. **Required, version 2.0.0 or newer** - without it (or with an older 1.x release) every command will reply with `K4-WorldText-API missing.`
 - [**CS2MenuManager (optional)**](https://github.com/schwarper/cs2menumanager): This is a shared developer API to handle menus. It's only required if you want to use the move menu command (`!mtext`).
 
 <!-- INSTALLATION -->
